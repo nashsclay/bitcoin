@@ -45,6 +45,7 @@ const std::string TX{"tx"};
 const std::string VERSION{"version"};
 const std::string WATCHMETA{"watchmeta"};
 const std::string WATCHS{"watchs"};
+const std::string STAKE_SPLIT_THRESHOLD{"stakeSplitThreshold"};
 } // namespace DBKeys
 
 //
@@ -159,6 +160,11 @@ bool WalletBatch::ReadBestBlock(CBlockLocator& locator)
 bool WalletBatch::WriteOrderPosNext(int64_t nOrderPosNext)
 {
     return WriteIC(DBKeys::ORDERPOSNEXT, nOrderPosNext);
+}
+
+bool WalletBatch::WriteStakeSplitThreshold(uint64_t nStakeSplitThreshold)
+{
+    return WriteIC(DBKeys::STAKE_SPLIT_THRESHOLD, nStakeSplitThreshold);
 }
 
 bool WalletBatch::ReadPool(int64_t nPool, CKeyPool& keypool)
@@ -383,6 +389,8 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             }
         } else if (strType == DBKeys::ORDERPOSNEXT) {
             ssValue >> pwallet->nOrderPosNext;
+        } else if (strType == DBKeys::STAKE_SPLIT_THRESHOLD) { //presstab HyperStake
+            ssValue >> pwallet->nStakeSplitThreshold;
         } else if (strType == DBKeys::DESTDATA) {
             std::string strAddress, strKey, strValue;
             ssKey >> strAddress;

@@ -550,8 +550,8 @@ static UniValue getblocktemplate(const JSONRPCRequest& request)
         entry.pushKV("depends", deps);
 
         int index_in_template = i - 1;
-        entry.pushKV("fee", pblocktemplate->vTxFees[index_in_template]);
-        int64_t nTxSigOps = pblocktemplate->vTxSigOpsCost[index_in_template];
+        entry.pushKV("fee", pblocktemplate->entries[index_in_template].fees);
+        int64_t nTxSigOps = pblocktemplate->entries[index_in_template].sigOpsCost;
         if (fPreSegWit) {
             assert(nTxSigOps % WITNESS_SCALE_FACTOR == 0);
             nTxSigOps /= WITNESS_SCALE_FACTOR;

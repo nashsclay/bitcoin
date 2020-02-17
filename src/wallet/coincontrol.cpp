@@ -15,6 +15,8 @@ void CCoinControl::SetNull()
     m_avoid_partial_spends = gArgs.GetBoolArg("-avoidpartialspends", DEFAULT_AVOIDPARTIALSPENDS);
     m_avoid_address_reuse = false;
     setSelected.clear();
+    fUseInstantSend = false;
+    fUsePrivateSend = true;
     m_feerate.reset();
     fOverrideFeeRate = false;
     m_confirm_target.reset();

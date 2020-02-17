@@ -38,7 +38,12 @@
 // Application startup time (used for uptime calculation)
 int64_t GetStartupTime();
 
+extern bool fMasternodeMode;
+extern bool fLiteMode;
+extern int nWalletBackups;
+
 extern const char * const BITCOIN_CONF_FILENAME;
+extern const char * const MASTERNODE_CONF_FILENAME;
 
 void SetupEnvironment();
 bool SetupNetworking();
@@ -71,11 +76,13 @@ fs::path GetDefaultDataDir();
 // The blocks directory is always net specific.
 const fs::path &GetBlocksDir();
 const fs::path &GetDataDir(bool fNetSpecific = true);
+const fs::path &GetBackupsDir();
 // Return true if -datadir option points to a valid directory or is not specified.
 bool CheckDataDirOption();
 /** Tests only */
 void ClearDatadirCache();
 fs::path GetConfigFile(const std::string& confPath);
+fs::path GetMasternodeConfigFile();
 #ifdef WIN32
 fs::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
@@ -116,6 +123,7 @@ enum class OptionsCategory {
     GUI,
     COMMANDS,
     REGISTER_COMMANDS,
+    MASTERNODE,
 
     HIDDEN // Always the last option to avoid printing these in the help
 };

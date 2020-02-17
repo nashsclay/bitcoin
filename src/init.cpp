@@ -969,11 +969,12 @@ bool AppInitParameterInteraction()
 
     // if using block pruning, then disallow txindex
     if (gArgs.GetArg("-prune", 0)) {
-        if (gArgs.GetBoolArg("-txindex", DEFAULT_TXINDEX))
-            return InitError(_("Prune mode is incompatible with -txindex.").translated);
-        if (!g_enabled_filter_types.empty()) {
+        //if (gArgs.GetBoolArg("-txindex", DEFAULT_TXINDEX))
+            //return InitError(_("Prune mode is incompatible with -txindex.").translated);
+        if (!g_enabled_filter_types.empty())
             return InitError(_("Prune mode is incompatible with -blockfilterindex.").translated);
-        }
+        if (gArgs.SoftSetBoolArg("-txindex", false))
+            LogPrintf("%s: parameter interaction: -prune set -> setting -txindex=0\n", __func__);
     }
 
     // -bind and -whitebind can't be set when not listening
