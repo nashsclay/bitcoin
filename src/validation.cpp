@@ -590,13 +590,36 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
         return state.Invalid(ValidationInvalidReason::TX_CONFLICT, false, REJECT_DUPLICATE, "txn-already-in-mempool");
     }
 
-    // Check for conflicts with in-memory transactions
+    // If this is a Transaction Lock Request check to see if it's valid
+    if (instantsend.HasTxLockRequest(hash) && !CTxLockRequest(tx).IsValid())
+        return state.Invalid(ValidationInvalidReason::TX_MEMPOOL_POLICY, error("AcceptToMemoryPool : CTxLockRequest %s is invalid", hash.ToString()),
+                            REJECT_INVALID, "bad-txlockrequest");
+
+    // Check for conflicts with a completed Transaction Lock or in-memory transactions
     for (const CTxIn &txin : tx.vin)
     {
+        uint256 hashLocked;
+        if (instantsend.GetLockedOutPointTxHash(txin.prevout, hashLocked) && hash != hashLocked)
+            return state.Invalid(ValidationInvalidReason::TX_CONFLICT, error("AcceptToMemoryPool : Transaction %s conflicts with completed Transaction Lock %s",
+                                    hash.ToString(), hashLocked.ToString()),
+                            REJECT_INVALID, "tx-txlock-conflict");
+
         const CTransaction* ptxConflicting = m_pool.GetConflictTx(txin.prevout);
         if (ptxConflicting) {
             if (!setConflicts.count(ptxConflicting->GetHash()))
             {
+                // InstantSend txes are not replacable
+                if (instantsend.HasTxLockRequest(ptxConflicting->GetHash())) {
+                    // this tx conflicts with a Transaction Lock Request candidate
+                    return state.Invalid(ValidationInvalidReason::TX_MEMPOOL_POLICY, error("AcceptToMemoryPool : Transaction %s conflicts with Transaction Lock Request %s",
+                                            hash.ToString(), ptxConflicting->GetHash().ToString()),
+                                    REJECT_INVALID, "tx-txlockreq-mempool-conflict");
+                } else if (instantsend.HasTxLockRequest(hash)) {
+                    // this tx is a tx lock request and it conflicts with a normal tx
+                    return state.Invalid(ValidationInvalidReason::TX_MEMPOOL_POLICY, error("AcceptToMemoryPool : Transaction Lock Request %s conflicts with transaction %s",
+                                            hash.ToString(), ptxConflicting->GetHash().ToString()),
+                                    REJECT_INVALID, "txlockreq-tx-mempool-conflict");
+                }
                 // Allow opt-out of transaction replacement by setting
                 // nSequence > MAX_BIP125_RBF_SEQUENCE (SEQUENCE_FINAL-2) on all inputs.
                 //
@@ -2084,6 +2107,17 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
         }
     }
 
+    /// DASH: Check superblock start
+
+    // make sure old budget is the real one
+    if (pindex->nHeight == chainparams.GetConsensus().nSuperblockStartBlock &&
+        chainparams.GetConsensus().nSuperblockStartHash != uint256() &&
+        block.GetHash() != chainparams.GetConsensus().nSuperblockStartHash)
+            return state.Invalid(ValidationInvalidReason::CONSENSUS, error("%s: invalid superblock start", __func__),
+                             REJECT_INVALID, "bad-sb-start");
+
+    /// END DASH
+
     // Start enforcing BIP68 (sequence locks)
     int nLockTimeFlags = 0;
     if (pindex->nHeight >= chainparams.GetConsensus().CSVHeight) {
@@ -2230,7 +2264,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
 
     // peercoin: track money supply and mint amount info
     pindex->nMint = nValueOut - nValueIn + nFees;
-    pindex->nMoneySupply = (pindex->pprev ? pindex->pprev->nMoneySupply : 0) + nMint - nAmountBurned;
+    pindex->nMoneySupply = (pindex->pprev ? pindex->pprev->nMoneySupply : 0) + pindex->nMint - nAmountBurned;
 
     // peercoin: fees are not collected by miners as in bitcoin
     // peercoin: fees are destroyed to compensate the entire network
@@ -3314,7 +3348,7 @@ static bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state,
     return true;
 }
 
-bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW, bool fCheckMerkleRoot)
+bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSignature)
 {
     // These are checks that are independent of context.
     const bool IsPoS = block.IsProofOfStake(); //|| (block.vtx.size() > 1 && block.vtx[1].IsCoinStake());
@@ -3366,7 +3400,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
 
     // peercoin: first coinbase output should be empty if proof-of-stake block
     int voutSize = block.vtx[0]->vout.size();
-    if (IsPoS && (voutSize < 1 || voutSize > 2 || !block.vtx[0]->vout[0].IsEmpty() || (voutSize == 2 && block.vtx[0]->vout[1].scriptPubKey[0] != OP_RETURN)))
+    if (IsPoS && (voutSize < 1 || voutSize > 2 || block.vtx[0]->GetValueOut() != 0 || !block.vtx[0]->vout[0].IsEmpty() || (voutSize == 2 && block.vtx[0]->vout[1].scriptPubKey[0] != OP_RETURN)))
         return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-cb-notempty", "coinbase output not empty in PoS block");
 
     // DASH : CHECK TRANSACTIONS FOR INSTANTSEND
@@ -3386,7 +3420,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
                     // relaying instantsend data won't help it.
                     LOCK(cs_main);
                     mapRejectedBlocks.insert(std::make_pair(block.GetHash(), GetTime()));
-                    return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "conflict-tx-lock", 
+                    return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "conflict-tx-lock",
                                      strprintf("transaction %s conflicts with transaction lock %s", tx->GetHash().ToString(), hashLocked.ToString()));
                 }
             }

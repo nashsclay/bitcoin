@@ -166,9 +166,9 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     coinbaseTx.vout[0].nValue = /*nFees +*/ GetBlockSubsidy(nHeight, consensusParams);
     coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
     pblocktemplate->entries[0].tx = MakeTransactionRef(std::move(coinbaseTx));
+    pblock->vtx[0] = pblocktemplate->entries[0].tx;
     pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, consensusParams);
     pblocktemplate->entries[0].fees = -nFees;
-    pblock->vtx[0] = pblocktemplate->entries[0].tx;
 
     LogPrintf("CreateNewBlock(): block weight: %u txs: %u fees: %ld sigops %d\n", GetBlockWeight(*pblock), nBlockTx, nFees, nBlockSigOpsCost);
 
