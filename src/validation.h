@@ -252,8 +252,8 @@ bool GetTransaction(const uint256& hash, CTransactionRef& tx, const Consensus::P
  * validationinterface callback.
  */
 bool ActivateBestChain(CValidationState& state, const CChainParams& chainparams, std::shared_ptr<const CBlock> pblock = std::shared_ptr<const CBlock>());
-CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams, bool fSuperblockPartOnly = false);
-CAmount GetMasternodePayment(int nHeight, CAmount blockValue);
+CAmount GetBlockSubsidy(int nHeight, bool fProofOfStake, uint64_t nCoinAge, const Consensus::Params& consensusParams, bool fSuperblockPartOnly = false);
+CAmount GetMasternodePayment(int nHeight, CAmount blockValue, bool fProofOfStake);
 
 /** Guess verification progress (as a fraction between 0.0=genesis and 1.0=current tip). */
 double GuessVerificationProgress(const ChainTxData& data, const CBlockIndex* pindex);
