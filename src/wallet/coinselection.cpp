@@ -186,6 +186,9 @@ static void ApproximateBestSubset(const std::vector<OutputGroup>& groups, const 
         {
             for (unsigned int i = 0; i < groups.size(); i++)
             {
+                /*if (fUseInstantSend && nTotal + groups[i].m_value > sporkManager.GetSporkValue(SPORK_5_INSTANTSEND_MAX_VALUE)*COIN) {
+                    continue;
+                }*/
                 //The solver here uses a randomized algorithm,
                 //the randomness serves no real security purpose but is just
                 //needed to prevent degenerate behavior and it is important

@@ -790,7 +790,6 @@ const fs::path &GetDataDir(bool fNetSpecific)
     if (fs::create_directories(path)) {
         // This is the first run, create wallets subdirectory too
         fs::create_directories(path / "wallets");
-        fs::create_directories(path / "backups");
     }
 
     return path;

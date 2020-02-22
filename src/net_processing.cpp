@@ -1333,8 +1333,12 @@ bool static AlreadyHave(const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         return mnpayments.mapMasternodePaymentVotes.count(inv.hash);
     case MSG_MASTERNODE_PAYMENT_BLOCK:
         {
-            BlockMap::iterator mi = mapBlockIndex.find(inv.hash);
-            return mi != mapBlockIndex.end() && mnpayments.mapMasternodeBlocks.find(mi->second->nHeight) != mnpayments.mapMasternodeBlocks.end();
+            CBlockIndex* index;
+            {
+                LOCK(cs_main);
+                index = LookupBlockIndex(inv.hash);
+            }
+            return index && mnpayments.mapMasternodeBlocks.find(index->nHeight) != mnpayments.mapMasternodeBlocks.end();
         }
     case MSG_MASTERNODE_ANNOUNCE:
         return mnodeman.mapSeenMasternodeBroadcast.count(inv.hash) && !mnodeman.IsMnbRecoveryRequested(inv.hash);
@@ -1354,7 +1358,9 @@ bool static AlreadyHave(const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
 void RelayTransaction(const uint256& txid, const CConnman& connman)
 {
-    CInv inv(MSG_TX, txid);
+    int nInv = static_cast<bool>(CPrivateSend::GetDSTX(txid)) ? MSG_DSTX :
+                (instantsend.HasTxLockRequest(txid) ? MSG_TXLOCK_REQUEST : MSG_TX);
+    CInv inv(nInv, txid);
     connman.ForEachNode([&inv](CNode* pnode)
     {
         pnode->PushInventory(inv);
@@ -1624,13 +1630,17 @@ void static ProcessGetData(CNode* pfrom, const CChainParams& chainparams, CConnm
                 }
             }
             if (!push && inv.type == MSG_MASTERNODE_PAYMENT_BLOCK) {
-                BlockMap::iterator mi = mapBlockIndex.find(inv.hash);
+                CBlockIndex* index;
+                {
+                    LOCK(cs_main);
+                    index = LookupBlockIndex(inv.hash);
+                }
                 LOCK(cs_mapMasternodeBlocks);
-                if (mi != mapBlockIndex.end() && mnpayments.mapMasternodeBlocks.count(mi->second->nHeight)) {
-                    BOOST_FOREACH(CMasternodePayee& payee, mnpayments.mapMasternodeBlocks[mi->second->nHeight].vecPayees) {
+                if (index && mnpayments.mapMasternodeBlocks.count(index->nHeight)) {
+                    for (CMasternodePayee& payee : mnpayments.mapMasternodeBlocks[index->nHeight].vecPayees) {
                         std::vector<uint256> vecVoteHashes = payee.GetVoteHashes();
-                        BOOST_FOREACH(uint256& hash, vecVoteHashes) {
-                            if(mnpayments.HasVerifiedPaymentVote(hash)) {
+                        for (uint256& hash : vecVoteHashes) {
+                            if (mnpayments.HasVerifiedPaymentVote(hash)) {
                                 connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::MASTERNODEPAYMENTVOTE, mnpayments.mapMasternodePaymentVotes[hash]));
                             }
                         }
@@ -1658,18 +1668,18 @@ void static ProcessGetData(CNode* pfrom, const CChainParams& chainparams, CConnm
                 }
             }
             if (!push && inv.type == MSG_GOVERNANCE_OBJECT) {
-                LogPrint("net", "ProcessGetData -- MSG_GOVERNANCE_OBJECT: inv = %s\n", inv.ToString());
+                LogPrint(BCLog::NET, "ProcessGetData -- MSG_GOVERNANCE_OBJECT: inv = %s\n", inv.ToString());
                 CDataStream ss(SER_NETWORK, pfrom->GetSendVersion());
                 bool topush = false;
                 {
                     if (governance.HaveObjectForHash(inv.hash)) {
                         ss.reserve(1000);
-                        if(governance.SerializeObjectForHash(inv.hash, ss)) {
+                        if (governance.SerializeObjectForHash(inv.hash, ss)) {
                             topush = true;
                         }
                     }
                 }
-                LogPrint("net", "ProcessGetData -- MSG_GOVERNANCE_OBJECT: topush = %d, inv = %s\n", topush, inv.ToString());
+                LogPrint(BCLog::NET, "ProcessGetData -- MSG_GOVERNANCE_OBJECT: topush = %d, inv = %s\n", topush, inv.ToString());
                 if (topush) {
                     connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::MNGOVERNANCEOBJECT, ss));
                     push = true;
@@ -1687,7 +1697,7 @@ void static ProcessGetData(CNode* pfrom, const CChainParams& chainparams, CConnm
                     }
                 }
                 if (topush) {
-                    LogPrint("net", "ProcessGetData -- pushing: inv = %s\n", inv.ToString());
+                    LogPrint(BCLog::NET, "ProcessGetData -- pushing: inv = %s\n", inv.ToString());
                     connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::MNGOVERNANCEOBJECTVOTE, ss));
                     push = true;
                 }

@@ -973,8 +973,10 @@ bool AppInitParameterInteraction()
             //return InitError(_("Prune mode is incompatible with -txindex.").translated);
         if (!g_enabled_filter_types.empty())
             return InitError(_("Prune mode is incompatible with -blockfilterindex.").translated);
-        if (gArgs.SoftSetBoolArg("-txindex", false))
-            LogPrintf("%s: parameter interaction: -prune set -> setting -txindex=0\n", __func__);
+        gArgs.ForceSetArg("-txindex", "0");
+        LogPrintf("%s: parameter interaction: -prune set -> setting -txindex=0\n", __func__);
+        gArgs.ForceSetArg("-litemode", "1");
+        LogPrintf("%s: parameter interaction: -prune set -> setting -litemode=1\n", __func__);
     }
 
     // -bind and -whitebind can't be set when not listening

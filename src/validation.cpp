@@ -46,6 +46,11 @@
 #include <validationinterface.h>
 #include <warnings.h>
 
+#include "instantx.h"
+#include "masternodeman.h"
+#include "masternode-payments.h"
+#include "spork.h"
+
 #include <future>
 #include <sstream>
 #include <string>
@@ -2322,13 +2327,13 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     CAmount blockReward = /*nFees +*/ GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus());
     std::string strError = "";
     if (!IsBlockValueValid(block, pindex->nHeight, blockReward, strError)) {
-        return state.Invalid(ValidationInvalidReason::NONE, error("ConnectBlock(DASH): %s", strError), REJECT_INVALID, "bad-cb-amount");
+        return state.Invalid(ValidationInvalidReason::RECENT_CONSENSUS_CHANGE, error("ConnectBlock(DASH): %s", strError), REJECT_INVALID, "bad-cb-amount");
         //return state.DoS(0, error("ConnectBlock(DASH): %s", strError), REJECT_INVALID, "bad-cb-amount");
     }
 
     if (!IsBlockPayeeValid(block.IsProofOfStake() ? *block.vtx[1] : *block.vtx[0], pindex->nHeight, blockReward)) {
-        mapRejectedBlocks.insert(std::make_pair(block.GetHash(), GetTime()));
-        return state.Invalid(ValidationInvalidReason::NONE, error("ConnectBlock(DASH): couldn't find masternode or superblock payments"),
+        //mapRejectedBlocks.insert(std::make_pair(block.GetHash(), GetTime()));
+        return state.Invalid(ValidationInvalidReason::RECENT_CONSENSUS_CHANGE, error("ConnectBlock(DASH): couldn't find masternode or superblock payments"),
                                 REJECT_INVALID, "bad-cb-payee");
         //return state.DoS(0, error("ConnectBlock(DASH): couldn't find masternode or superblock payments"),
                                 //REJECT_INVALID, "bad-cb-payee");
@@ -3499,8 +3504,8 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
                 if (instantsend.GetLockedOutPointTxHash(txin.prevout, hashLocked) && hashLocked != tx->GetHash()) {
                     // The node which relayed this will have to switch later,
                     // relaying instantsend data won't help it.
-                    LOCK(cs_main);
-                    mapRejectedBlocks.insert(std::make_pair(block.GetHash(), GetTime()));
+                    //LOCK(cs_main);
+                    //mapRejectedBlocks.insert(std::make_pair(block.GetHash(), GetTime()));
                     return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "conflict-tx-lock",
                                      strprintf("transaction %s conflicts with transaction lock %s", tx->GetHash().ToString(), hashLocked.ToString()));
                 }
