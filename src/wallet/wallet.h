@@ -63,11 +63,6 @@ enum class WalletCreationStatus {
 
 WalletCreationStatus CreateWallet(interfaces::Chain& chain, const SecureString& passphrase, uint64_t wallet_creation_flags, const std::string& name, std::string& error, std::string& warning, std::shared_ptr<CWallet>& result);
 
-/**
- * Settings
- */
-extern bool fWalletUnlockMintOnly;
-
 //! Default for -keypool
 static const unsigned int DEFAULT_KEYPOOL_SIZE = 1000;
 //! -paytxfee default
@@ -776,6 +771,9 @@ private:
     //! keeps track of whether Unlock has run a thorough check before
     bool fDecryptionThoroughlyChecked;
 
+    //! if fOnlyMintingAllowed is true, only minting should be allowed in unlocked wallet
+    bool fOnlyMintingAllowed = false;
+
     using CryptedKeyMap = std::map<CKeyID, std::pair<CPubKey, std::vector<unsigned char>>>;
     using WatchOnlySet = std::set<CScript>;
     using WatchKeyMap = std::map<CKeyID, CPubKey>;
@@ -785,7 +783,7 @@ private:
     //! will encrypt previously unencrypted keys
     bool EncryptKeys(CKeyingMaterial& vMasterKeyIn);
 
-    bool Unlock(const CKeyingMaterial& vMasterKeyIn, bool accept_no_keys = false);
+    bool Unlock(const CKeyingMaterial& vMasterKeyIn, bool accept_no_keys = false, bool fForMintingOnly = false);
     CryptedKeyMap mapCryptedKeys GUARDED_BY(cs_KeyStore);
     WatchOnlySet setWatchOnly GUARDED_BY(cs_KeyStore);
     WatchKeyMap mapWatchKeys GUARDED_BY(cs_KeyStore);
@@ -991,8 +989,16 @@ public:
     }
 
     bool IsCrypted() const { return fUseCrypto; }
-    bool IsLocked() const;
-    bool Lock();
+    // This function should be used in a different combinations to determine
+    // if CWallet is fully locked so that no operations requiring access
+    // to private keys are possible:
+    //      IsLocked(true)
+    // or if CWallet's private keys are available for minting only:
+    //      !IsLocked(true) && IsLocked()
+    // or if they are available for everything:
+    //      !IsLocked()
+    bool IsLocked(bool fForMinting = false) const;
+    bool Lock(bool fAllowMinting = false);
 
     /** Interface to assert chain access and if successful lock it */
     std::unique_ptr<interfaces::Chain::Lock> LockChain() { return m_chain ? m_chain->lock() : nullptr; }
@@ -1149,7 +1155,7 @@ public:
     //! Holds a timestamp at which point the wallet is scheduled (externally) to be relocked. Caller must arrange for actual relocking to occur via Lock().
     int64_t nRelockTime = 0;
 
-    bool Unlock(const SecureString& strWalletPassphrase, bool accept_no_keys = false, bool mintOnly = false);
+    bool Unlock(const SecureString& strWalletPassphrase, bool accept_no_keys = false, bool fForMintingOnly = false);
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 
@@ -1210,6 +1216,7 @@ public:
     CAmount GetNormalizedAnonymizedBalance() const;
     CAmount GetNeedsToBeAnonymizedBalance(CAmount nMinBalance = 0) const;
     CAmount GetDenominatedBalance(bool unconfirmed=false) const;
+    CAmount GetStake() const;
 
     bool GetBudgetSystemCollateralTX(CTransactionRef& tx, uint256 hash, CAmount amount, bool fUseInstantSend) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     bool GetBudgetSystemCollateralTX(CWalletTx& tx, uint256 hash, CAmount amount, bool fUseInstantSend) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
