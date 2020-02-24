@@ -242,7 +242,32 @@ BITCOIN_CORE_H = \
   zmq/zmqconfig.h\
   zmq/zmqnotificationinterface.h \
   zmq/zmqpublishnotifier.h \
-  zmq/zmqrpc.h
+  zmq/zmqrpc.h \
+## --- dash headers start from this line --- ##
+  governance/governance.h \
+  governance/governance-classes.h \
+  governance/governance-exceptions.h \
+  governance/governance-object.h \
+  governance/governance-validators.h \
+  governance/governance-vote.h \
+  governance/governance-votedb.h \
+  instantx.h \
+  masternode/activemasternode.h \
+  masternode/masternode.h \
+  masternode/masternode-payments.h \
+  masternode/masternode-sync.h \
+  masternode/masternodeman.h \
+  masternode/masternodeconfig.h \
+  messagesigner.h \
+  netfulfilledman.h \
+  privatesend/privatesend.h \
+  privatesend/privatesend-client.h \
+  privatesend/privatesend-server.h \
+  privatesend/privatesend-util.h \
+  spork.h \
+## --- peercoin headers start from this line --- ##
+  kernel.h \
+  kernelrecord.h
 
 
 obj/build.h: FORCE
@@ -304,6 +329,24 @@ libbitcoin_server_a_SOURCES = \
   validation.cpp \
   validationinterface.cpp \
   versionbits.cpp \
+  governance/governance.cpp \
+  governance/governance-classes.cpp \
+  governance/governance-object.cpp \
+  governance/governance-validators.cpp \
+  governance/governance-vote.cpp \
+  governance/governance-votedb.cpp \
+  instantx.cpp \
+  masternode/masternode.cpp \
+  masternode/masternode-payments.cpp \
+  masternode/masternode-sync.cpp \
+  masternode/masternodeconfig.cpp \
+  masternode/masternodeman.cpp \
+  messagesigner.cpp \
+  netfulfilledman.cpp \
+  privatesend/privatesend.cpp \
+  privatesend/privatesend-server.cpp \
+  spork.cpp \
+  kernel.cpp \
   $(BITCOIN_CORE_H)
 
 if ENABLE_WALLET
@@ -344,6 +387,9 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/walletdb.cpp \
   wallet/walletutil.cpp \
   wallet/coinselection.cpp \
+  privatesend/privatesend-client.cpp \
+  privatesend/privatesend-util.cpp \
+  kernelrecord.cpp \
   $(BITCOIN_CORE_H)
 
 libbitcoin_wallet_tool_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
