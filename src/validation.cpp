@@ -1974,7 +1974,7 @@ bool ContextualCheckPoSBlock(const CBlock& block, CValidationState& state, CBloc
         return error("ConnectBlock() : ComputeNextStakeModifier() failed");
 
   // compute nStakeModifierChecksum begin
-    unsigned int nFlagsBackup      = pindex->nFlags;
+    /*unsigned int nFlagsBackup      = pindex->nFlags;
     uint64_t nStakeModifierBackup  = pindex->nStakeModifier;
     uint256 hashProofOfStakeBackup = pindex->hashProofOfStake;
 
@@ -1993,23 +1993,23 @@ bool ContextualCheckPoSBlock(const CBlock& block, CValidationState& state, CBloc
   // compute nStakeModifierChecksum end
 
     if (!CheckStakeModifierCheckpoints(pindex->nHeight, nStakeModifierChecksum))
-        return error("ConnectBlock() : Rejected by stake modifier checkpoint height=%d, modifier=0x%016llx", pindex->nHeight, nStakeModifier);
+        return error("ConnectBlock() : Rejected by stake modifier checkpoint height=%d, modifier=0x%016llx", pindex->nHeight, nStakeModifier);*/
 
     if (fJustCheck)
         return true;
 
 
     // write everything to index
-    if (block.IsProofOfStake())
+    /*if (block.IsProofOfStake())
     {
         pindex->prevoutStake = block.vtx[1]->vin[0].prevout;
         pindex->nStakeTime = block.vtx[1]->nTime;
         pindex->hashProofOfStake = hashProofOfStake;
-    }
+    }*/
     if (!pindex->SetStakeEntropyBit(nEntropyBit))
         return error("ConnectBlock() : SetStakeEntropyBit() failed");
     pindex->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
-    pindex->nStakeModifierChecksum = nStakeModifierChecksum;
+    //pindex->nStakeModifierChecksum = nStakeModifierChecksum;
     setDirtyBlockIndex.insert(pindex);  // queue a write to disk
 
     return true;
@@ -2026,7 +2026,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     assert(*pindex->phashBlock == block.GetHash());
     int64_t nTimeStart = GetTimeMicros();
 
-    if (pindex->nStakeModifier == 0 && pindex->nStakeModifierChecksum == 0 && !ContextualCheckPoSBlock(block, state, pindex, fJustCheck))
+    if (pindex->nStakeModifier == 0 && /*pindex->nStakeModifierChecksum == 0 &&*/ !ContextualCheckPoSBlock(block, state, pindex, fJustCheck))
         return error("%s: failed PoS check %s", __func__, FormatStateMessage(state));
 
     // Check it again in case a previous version let a bad block in
@@ -4320,10 +4320,10 @@ bool BlockManager::LoadBlockIndex(
             pindexBestHeader = pindex;
 
         // peercoin: calculate stake modifier checksum
-        pindex->nStakeModifierChecksum = GetStakeModifierChecksum(pindex);
-        if (::ChainActive().Contains(pindex))
-            if (!CheckStakeModifierCheckpoints(pindex->nHeight, pindex->nStakeModifierChecksum))
-                return error("LoadBlockIndex() : Failed stake modifier checkpoint height=%d, modifier=0x%016llx", pindex->nHeight, pindex->nStakeModifier);
+        //pindex->nStakeModifierChecksum = GetStakeModifierChecksum(pindex);
+        //if (::ChainActive().Contains(pindex))
+            //if (!CheckStakeModifierCheckpoints(pindex->nHeight, pindex->nStakeModifierChecksum))
+                //return error("LoadBlockIndex() : Failed stake modifier checkpoint height=%d, modifier=0x%016llx", pindex->nHeight, pindex->nStakeModifier);
     }
 
     return true;

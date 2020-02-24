@@ -1043,6 +1043,31 @@ int64_t CWallet::IncOrderPosNext(WalletBatch* batch)
     return nRet;
 }
 
+void CWallet::WalletUpdateSpent(const CTransactionRef &tx)
+{
+    // Anytime a signature is successfully verified, it's proof the outpoint is spent.
+    // Update the wallet spent flag if it doesn't know due to wallet.dat being
+    // restored from backup or the user making copies of wallet.dat.
+    {
+        LOCK(cs_wallet);
+        for (const CTxIn& txin : tx->vin)
+        {
+            auto mi = mapWallet.find(txin.prevout.hash);
+            if (mi != mapWallet.end())
+            {
+                CWalletTx& wtx = (*mi).second;
+                if (txin.prevout.n >= wtx.tx->vout.size())
+                    LogPrintf("WalletUpdateSpent: bad wtx %s\n", wtx.GetHash().ToString().c_str());
+                else if (IsMine(wtx.tx->vout[txin.prevout.n]))
+                {
+                    LogPrintf("WalletUpdateSpent found spent coin %sppc %s\n", FormatMoney(wtx.GetCredit(ISMINE_SPENDABLE)).c_str(), wtx.GetHash().ToString().c_str());
+                    NotifyTransactionChanged(this, txin.prevout.hash, CT_UPDATED);
+                }
+            }
+        }
+    }
+}
+
 void CWallet::MarkDirty()
 {
     {
@@ -1207,6 +1232,9 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFlushOnClose)
 
     // Break debit/credit balance caches:
     wtx.MarkDirty();
+
+    // since AddToWallet is called directly for self-originating transactions, check for consumption of own coins
+    WalletUpdateSpent(wtx.tx);
 
     // Notify UI of new or updated transaction
     NotifyTransactionChanged(this, hash, fInsertedNew ? CT_NEW : CT_UPDATED);
@@ -2101,6 +2129,35 @@ void CWalletTx::GetAmounts(std::list<COutputEntry>& listReceived,
         nFee = nDebit - nValueOut;
     }
 
+    // treat coinstake as a single "recieve" entry
+    if (IsCoinStake())
+    {
+        for (unsigned int i = 0; i < tx->vout.size(); ++i)
+        {
+            const CTxOut& txout = tx->vout[i];
+            isminetype fIsMine = pwallet->IsMine(txout);
+
+            // get my vout with positive output
+            if (!(fIsMine & filter) || txout.nValue <= 0)
+                        continue;
+
+            // get address
+            CTxDestination address = CNoDestination();
+            ExtractDestination(txout.scriptPubKey, address);
+
+            // nfee is negative for coinstake generation, because we are gaining money from it
+            COutputEntry output = {address, -nFee, (int)i};
+            listReceived.push_back(output);
+            nFee = 0;
+            return;
+        }
+
+        // if we reach here there is probably a mistake
+        COutputEntry output = {CNoDestination(), 0, 0};
+        listReceived.push_back(output);
+        return;
+    }
+
     // Sent/received.
     for (unsigned int i = 0; i < tx->vout.size(); ++i)
     {
@@ -2313,7 +2370,7 @@ void CWallet::ReacceptWalletTransactions(interfaces::Chain::Lock& locked_chain)
 
         int nDepth = wtx.GetDepthInMainChain(locked_chain);
 
-        if (!wtx.IsCoinBase() && (nDepth == 0 && !wtx.isAbandoned())) {
+        if (!wtx.IsCoinBase() && !wtx.IsCoinStake() && (nDepth == 0 && !wtx.isAbandoned())) {
             mapSorted.insert(std::make_pair(wtx.nOrderPos, &wtx));
         }
     }
@@ -6089,8 +6146,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     bnTargetPerCoinDay.SetCompact(nBits);
 
     // Transaction index is required to get to block header
-    if (!fTxIndex)
-        return error("CreateCoinStake : transaction index unavailable");
+    //if (!fTxIndex)
+        //return error("CreateCoinStake : transaction index unavailable");
     const Consensus::Params& params = Params().GetConsensus();
 
     LOCK2(cs_main, cs_wallet);
@@ -6240,8 +6297,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             if (pcoin.txout.nValue > nCombineThreshold)
                 continue;
             // Do not add input that is still too young
-            if (tx->nTime + params.nStakeMaxAge > txNew.nTime)
-                continue;
+            //if (tx->nTime + params.nStakeMaxAge > txNew.nTime)
+                //continue;
             txNew.vin.push_back(CTxIn(pcoin.outpoint.hash, pcoin.outpoint.n));
             nCredit += pcoin.txout.nValue;
             vwtxPrev.push_back(tx);
