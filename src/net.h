@@ -743,6 +743,9 @@ public:
     std::vector<uint256> vInventoryBlockToSend GUARDED_BY(cs_inventory);
     CCriticalSection cs_inventory;
 
+    // List of non-tx/non-block inventory items
+    std::vector<CInv> vInventoryOtherToSend GUARDED_BY(cs_inventory);
+
     struct TxRelay {
         TxRelay() { pfilter = MakeUnique<CBloomFilter>(); }
         mutable CCriticalSection cs_filter;
@@ -915,11 +918,19 @@ public:
         if (inv.type == MSG_TX && m_tx_relay != nullptr) {
             LOCK(m_tx_relay->cs_tx_inventory);
             if (!m_tx_relay->filterInventoryKnown.contains(inv.hash)) {
+                LogPrint(BCLog::NET, "PushInventory --  inv: %s peer=%d\n", inv.ToString(), id);
                 m_tx_relay->setInventoryTxToSend.insert(inv.hash);
+            } else {
+                LogPrint(BCLog::NET, "PushInventory --  filtered inv: %s peer=%d\n", inv.ToString(), id);
             }
         } else if (inv.type == MSG_BLOCK) {
             LOCK(cs_inventory);
+            LogPrint(BCLog::NET, "PushInventory --  inv: %s peer=%d\n", inv.ToString(), id);
             vInventoryBlockToSend.push_back(inv.hash);
+        } else {
+            LOCK(cs_inventory);
+            LogPrint(BCLog::NET, "PushInventory --  inv: %s peer=%d\n", inv.ToString(), id);
+            vInventoryOtherToSend.push_back(inv);
         }
     }
 

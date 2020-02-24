@@ -29,16 +29,16 @@
 #include <util/strencodings.h>
 #include <util/validation.h>
 
-#include "spork.h"
-#include "governance.h"
-#include "instantx.h"
-#include "masternode-payments.h"
-#include "masternode-sync.h"
-#include "masternodeman.h"
+#include <spork.h>
+#include <governance/governance.h>
+#include <instantx.h>
+#include <masternode/masternode-payments.h>
+#include <masternode/masternode-sync.h>
+#include <masternode/masternodeman.h>
 #ifdef ENABLE_WALLET
-#include "privatesend-client.h"
+#include <privatesend/privatesend-client.h>
 #endif // ENABLE_WALLET
-#include "privatesend-server.h"
+#include <privatesend/privatesend-server.h>
 
 #include <memory>
 #include <typeinfo>

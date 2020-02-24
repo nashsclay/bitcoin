@@ -190,7 +190,7 @@ static const unsigned int DEFAULT_CHECKLEVEL = 3;
 // full block file chunks, we need the high water mark which triggers the prune to be
 // one 128MB block file + added 15% undo data = 147MB greater for a total of 545MB
 // Setting the target to >= 550 MiB will make it likely we can respect the target.
-static const uint64_t MIN_DISK_SPACE_FOR_BLOCK_FILES = 2048 * 1024 * 1024;
+static const uint64_t MIN_DISK_SPACE_FOR_BLOCK_FILES = 2048ULL * 1024 * 1024;
 
 /**
  * Process an incoming block. This only returns after the best known valid
@@ -799,8 +799,8 @@ bool DumpMempool(const CTxMemPool& pool);
 bool LoadMempool(CTxMemPool& pool);
 
 // peercoin:
-bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache &view, uint64_t& nCoinAge); // peercoin: get transaction coin age
-bool SignBlock(CBlock& block, const CKeyStore& keystore);
+//bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache &view, uint64_t& nCoinAge); // peercoin: get transaction coin age
+//bool SignBlock(CBlock& block, const CWallet* pwallet);
 bool CheckBlockSignature(const CBlock& block);
 
 //! Check whether the block associated with this index entry is pruned or not.

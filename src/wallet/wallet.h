@@ -23,7 +23,7 @@
 #include <wallet/walletdb.h>
 #include <wallet/walletutil.h>
 
-#include "privatesend.h"
+#include <privatesend/privatesend.h>
 
 #include <algorithm>
 #include <atomic>

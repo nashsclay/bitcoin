@@ -31,11 +31,10 @@
 #include <wallet/coincontrol.h>
 #include <wallet/fees.h>
 
-#include "governance.h"
-#include "instantx.h"
-#include "keepass.h"
-#include "privatesend-client.h"
-#include "spork.h"
+#include <governance/governance.h>
+#include <instantx.h>
+#include <privatesend/privatesend-client.h>
+#include <spork.h>
 
 #include <algorithm>
 #include <assert.h>
@@ -3435,12 +3434,12 @@ bool CWallet::SelectCoinsGroupedByAddresses(std::vector<CompactTallyItem>& vecTa
     if (fAnonymizable && fSkipUnconfirmed) {
         if (fSkipDenominated && fAnonymizableTallyCachedNonDenom) {
             vecTallyRet = vecAnonymizableTallyCachedNonDenom;
-            LogPrint("selectcoins", "SelectCoinsGroupedByAddresses - using cache for non-denom inputs %d\n", vecTallyRet.size());
+            LogPrint(BCLog::SELECTCOINS, "SelectCoinsGroupedByAddresses - using cache for non-denom inputs %d\n", vecTallyRet.size());
             return vecTallyRet.size() > 0;
         }
         if (!fSkipDenominated && fAnonymizableTallyCached) {
             vecTallyRet = vecAnonymizableTallyCached;
-            LogPrint("selectcoins", "SelectCoinsGroupedByAddresses - using cache for all inputs %d\n", vecTallyRet.size());
+            LogPrint(BCLog::SELECTCOINS, "SelectCoinsGroupedByAddresses - using cache for all inputs %d\n", vecTallyRet.size());
             return vecTallyRet.size() > 0;
         }
     }
@@ -3514,11 +3513,11 @@ bool CWallet::SelectCoinsGroupedByAddresses(std::vector<CompactTallyItem>& vecTa
     }
 
     // debug
-    if (LogAcceptCategory("selectcoins")) {
+    if (LogAcceptCategory(BCLog::SELECTCOINS)) {
         std::string strMessage = "SelectCoinsGroupedByAddresses - vecTallyRet:\n";
         for (const auto& item : vecTallyRet)
             strMessage += strprintf("  %s %f\n", CBitcoinAddress(item.txdest).ToString().c_str(), float(item.nAmount)/COIN);
-        LogPrint("selectcoins", "%s", strMessage);
+        LogPrint(BCLog::SELECTCOINS, "%s", strMessage);
     }
 
     return vecTallyRet.size() > 0;

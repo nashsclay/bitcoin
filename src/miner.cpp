@@ -23,8 +23,8 @@
 #include <util/system.h>
 #include <util/validation.h>
 
-#include "masternode-payments.h"
-#include "masternode-sync.h"
+#include <masternode/masternode-payments.h>
+#include <masternode/masternode-sync.h>
 
 #include <algorithm>
 #include <queue>

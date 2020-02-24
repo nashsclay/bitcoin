@@ -244,6 +244,8 @@ BITCOIN_CORE_H = \
   zmq/zmqpublishnotifier.h \
   zmq/zmqrpc.h \
 ## --- dash headers start from this line --- ##
+  cachemap.h \
+  cachemultimap.h \
   governance/governance.h \
   governance/governance-classes.h \
   governance/governance-exceptions.h \

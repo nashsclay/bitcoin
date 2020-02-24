@@ -46,10 +46,11 @@
 #include <validationinterface.h>
 #include <warnings.h>
 
-#include "instantx.h"
-#include "masternodeman.h"
-#include "masternode-payments.h"
-#include "spork.h"
+#include <instantx.h>
+#include <masternode/masternodeman.h>
+#include <masternode/masternode-payments.h>
+#include <spork.h>
+#include <kernel.h>
 
 #include <future>
 #include <sstream>
@@ -3438,7 +3439,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
 {
     // These are checks that are independent of context.
     const bool IsPoS = block.IsProofOfStake(); //|| (block.vtx.size() > 1 && block.vtx[1].IsCoinStake());
-    LogPrint("debug", "%s: block=%s is %s\n", __func__, block.GetHash().GetHex(), IsPoS ? "proof of stake" : "proof of work");
+    LogPrint(BCLog::VALIDATION, "%s: block=%s is %s\n", __func__, block.GetHash().GetHex(), IsPoS ? "proof of stake" : "proof of work");
 
     if (block.fChecked)
         return true;
@@ -5358,7 +5359,7 @@ static CMainCleanup instance_of_cmaincleanup;
 // guaranteed to be in main chain by sync-checkpoint. This rule is
 // introduced to help nodes establish a consistent view of the coin
 // age (trust score) of competing branches.
-bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache &view, uint64_t& nCoinAge)
+/*bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache &view, uint64_t& nCoinAge)
 {
     arith_uint256 bnCentSecond = 0;  // coin age in the unit of cent-seconds
     nCoinAge = 0;
@@ -5415,15 +5416,15 @@ bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache &view, uint64_t& n
         LogPrintf("coin age bnCoinDay=%s\n", bnCoinDay.ToString());
     nCoinAge = bnCoinDay.GetLow64();
     return true;
-}
+}*/
 
 // peercoin: sign block
 typedef std::vector<unsigned char> valtype;
-bool SignBlock(CBlock& block, const CKeyStore& keystore)
+/*bool SignBlock(CBlock& block, const CWallet* pwallet)
 {
     std::vector<valtype> vSolutions;
     txnouttype whichType;
-    const CTxOut& txout = block.IsProofOfStake()? block.vtx[1]->vout[1] : block.vtx[0]->vout[0];
+    const CTxOut& txout = block.IsProofOfStake() ? block.vtx[1]->vout[1] : block.vtx[0]->vout[0];
 
     if (!Solver(txout.scriptPubKey, whichType, vSolutions))
         return false;
@@ -5432,14 +5433,14 @@ bool SignBlock(CBlock& block, const CKeyStore& keystore)
         // Sign
         const valtype& vchPubKey = vSolutions[0];
         CKey key;
-        if (!keystore.GetKey(CKeyID(Hash160(vchPubKey)), key))
+        if (!pwallet->GetKey(CKeyID(Hash160(vchPubKey)), key))
             return false;
         if (key.GetPubKey() != CPubKey(vchPubKey))
             return false;
         return key.Sign(block.GetHash(), block.vchBlockSig);
     }
     return false;
-}
+}*/
 
 // peercoin: check block signature
 bool CheckBlockSignature(const CBlock& block)
