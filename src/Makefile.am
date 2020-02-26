@@ -268,8 +268,7 @@ BITCOIN_CORE_H = \
   privatesend/privatesend-util.h \
   spork.h \
 ## --- peercoin headers start from this line --- ##
-  kernel.h \
-  kernelrecord.h
+  kernel.h
 
 
 obj/build.h: FORCE
@@ -391,7 +390,6 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/coinselection.cpp \
   privatesend/privatesend-client.cpp \
   privatesend/privatesend-util.cpp \
-  kernelrecord.cpp \
   $(BITCOIN_CORE_H)
 
 libbitcoin_wallet_tool_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)

@@ -1,5 +1,6 @@
 // Copyright (c) 2012-2020 The Peercoin developers
-// Distributed under the MIT software license, see the accompanying
+// Copyright (c) 2015-2019 The PIVX developers
+// Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #ifndef PEERCOIN_KERNEL_H
 #define PEERCOIN_KERNEL_H
@@ -16,36 +17,19 @@ class CBlock;
 // ratio of group interval length between the last group and the first group
 static const int MODIFIER_INTERVAL_RATIO = 3;
 
-// Protocol switch time of v0.3 kernel protocol
-extern unsigned int nProtocolV03SwitchTime;
-extern unsigned int nProtocolV03TestSwitchTime;
-
-// Whether a given coinstake is subject to new v0.3 protocol
-bool IsProtocolV03(unsigned int nTimeCoinStake);
-// Whether a given block is subject to new v0.4 protocol
-bool IsProtocolV04(unsigned int nTimeBlock);
-// Whether a given transaction is subject to new v0.5 protocol
-bool IsProtocolV05(unsigned int nTimeTx);
-// Whether a given block is subject to new v0.6 protocol
-// Test against previous block index! (always available)
-bool IsProtocolV06(const CBlockIndex *pindexPrev);
-// Whether a given transaction is subject to new v0.7 protocol
-bool IsProtocolV07(unsigned int nTimeTx);
-// Whether a given block is subject to new BIPs from bitcoin 0.16.x
-bool IsBTC16BIPsEnabled(uint32_t nTimeTx);
-// Whether a given timestamp is subject to new v0.9 protocol
-bool IsProtocolV09(unsigned int nTimeTx);
-
 // Compute the hash modifier for proof-of-stake
 bool ComputeNextStakeModifier(const CBlockIndex* pindexCurrent, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier);
+uint256 ComputeStakeModifierV2(const CBlockIndex* pindexPrev, const uint256& kernel);
 
 // Check whether stake kernel meets hash target
 // Sets hashProofOfStake on success return
-bool CheckStakeKernelHash(unsigned int nBits, CBlockIndex* pindexPrev, const CBlockHeader& blockFrom, unsigned int nTxPrevOffset, const CTransactionRef& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, bool fPrintProofOfStake=false);
+uint256 stakeHash(unsigned int nTimeTx, CDataStream ss, unsigned int prevoutIndex, uint256 prevoutHash, unsigned int nTimeBlockFrom);
+bool stakeTargetHit(uint256 hashProofOfStake, int64_t nValueIn, uint256 bnTargetPerCoinDay);
+bool CheckStakeKernelHash(const unsigned int& nBits, CBlockIndex* pindexPrev, const CBlockHeader& blockFrom, const CTransactionRef& txPrev, const COutPoint& prevout, unsigned int& nTimeTx, unsigned int nHashDrift, bool fCheck, uint256& hashProofOfStake, bool fPrintProofOfStake = false);
 
 // Check kernel hash target and coinstake signature
 // Sets hashProofOfStake on success return
-bool CheckProofOfStake(CValidationState &state, CBlockIndex* pindexPrev, const CTransactionRef &tx, unsigned int nBits, uint256& hashProofOfStake);
+bool CheckProofOfStake(CValidationState &state, CBlockIndex* pindexPrev, const CTransactionRef &tx, const unsigned int& nBits, unsigned int nTimeTx, uint256& hashProofOfStake)
 
 // Check whether the coinstake timestamp meets protocol
 bool CheckCoinStakeTimestamp(int64_t nTimeBlock, int64_t nTimeTx);
