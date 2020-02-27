@@ -259,7 +259,7 @@ public:
     std::string ToString() const
     {
         return strprintf("nDenom=%d, nInputCount=%d, nTime=%lld, fReady=%s, fTried=%s, masternode=%s",
-                        nDenom, nInputCount, nTime, fReady ? "true" : "false", fTried ? "true" : "false", masternodeOutpoint.ToStringShort());
+                        nDenom, nInputCount, nTime, fReady ? "true" : "false", fTried ? "true" : "false", masternodeOutpoint.ToString());
     }
 
     friend bool operator==(const CDarksendQueue& a, const CDarksendQueue& b)

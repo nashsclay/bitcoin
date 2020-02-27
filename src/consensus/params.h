@@ -47,6 +47,12 @@ struct BIP9Deployment {
 struct Params {
     uint256 hashGenesisBlock;
     int nSubsidyHalvingInterval;
+    int nBudgetPaymentsStartBlock;
+    int nSuperblockStartBlock;
+    uint256 nSuperblockStartHash;
+    int nLastPoWBlock;
+    int nMandatoryUpgradeBlock;
+    int nUpgradeBlockVersion;
     /* Block hash that is excepted from BIP16 enforcement */
     uint256 BIP16Exception;
     /** Block height and hash at which BIP34 becomes active */

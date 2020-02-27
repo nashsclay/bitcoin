@@ -92,5 +92,6 @@ bool GetNodeStateStats(NodeId nodeid, CNodeStateStats &stats);
 
 /** Relay transaction to every node */
 void RelayTransaction(const uint256&, const CConnman& connman);
+void RelayInv(const CInv& inv, const CConnman& connman, const int minProtoVersion = MIN_PEER_PROTO_VERSION);
 
 #endif // BITCOIN_NET_PROCESSING_H

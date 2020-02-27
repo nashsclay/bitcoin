@@ -64,6 +64,12 @@ public:
     CMainParams() {
         strNetworkID = "main";
         consensus.nSubsidyHalvingInterval = 210000;
+        consensus.nBudgetPaymentsStartBlock = 328008; // actual historical value
+        consensus.nSuperblockStartBlock = 614820; // The block at which 12.1 goes live (end of final 12.0 budget cycle)
+        consensus.nSuperblockStartHash = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
+        consensus.nLastPoWBlock = 2100000000;
+        consensus.nMandatoryUpgradeBlock = 1;
+        consensus.nUpgradeBlockVersion = 8; //Block headers must be at least this version after upgrade block
         consensus.BIP16Exception = uint256S("0x00000000000002dc756eebf4f49723ed8d30cc28a5f108eb94b1ba88ac4f9c22");
         consensus.BIP34Height = 227931;
         consensus.BIP34Hash = uint256S("0x000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8");
@@ -136,6 +142,8 @@ public:
         fRequireStandard = true;
         m_is_test_chain = false;
 
+        nPoolMaxTransactions = 3;
+
         checkpointData = {
             {
                 { 11111, uint256S("0x0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d")},
@@ -171,6 +179,12 @@ public:
     CTestNetParams() {
         strNetworkID = "test";
         consensus.nSubsidyHalvingInterval = 210000;
+        consensus.nBudgetPaymentsStartBlock = 328008; // actual historical value
+        consensus.nSuperblockStartBlock = 614820; // The block at which 12.1 goes live (end of final 12.0 budget cycle)
+        consensus.nSuperblockStartHash = uint256();
+        consensus.nLastPoWBlock = 2100000000;
+        consensus.nMandatoryUpgradeBlock = 1;
+        consensus.nUpgradeBlockVersion = 8; //Block headers must be at least this version after upgrade block
         consensus.BIP16Exception = uint256S("0x00000000dd30457c001f4095d208cc1296b0eed002427aa599874af7a432b105");
         consensus.BIP34Height = 21111;
         consensus.BIP34Hash = uint256S("0x0000000023b3a96d3484e5abb3755c413e7d41500f8e2a5c3f0dd01299cd8ef8");
@@ -232,6 +246,7 @@ public:
         fRequireStandard = false;
         m_is_test_chain = true;
 
+        nPoolMaxTransactions = 3;
 
         checkpointData = {
             {
@@ -256,6 +271,12 @@ public:
     explicit CRegTestParams(const ArgsManager& args) {
         strNetworkID = "regtest";
         consensus.nSubsidyHalvingInterval = 150;
+        consensus.nBudgetPaymentsStartBlock = 328008; // actual historical value
+        consensus.nSuperblockStartBlock = 614820; // The block at which 12.1 goes live (end of final 12.0 budget cycle)
+        consensus.nSuperblockStartHash = uint256();
+        consensus.nLastPoWBlock = 2100000000;
+        consensus.nMandatoryUpgradeBlock = 1;
+        consensus.nUpgradeBlockVersion = 8; //Block headers must be at least this version after upgrade block
         consensus.BIP16Exception = uint256();
         consensus.BIP34Height = 500; // BIP34 activated on regtest (Used in functional tests)
         consensus.BIP34Hash = uint256();
@@ -303,6 +324,8 @@ public:
         fDefaultConsistencyChecks = true;
         fRequireStandard = true;
         m_is_test_chain = true;
+
+        nPoolMaxTransactions = 3;
 
         checkpointData = {
             {

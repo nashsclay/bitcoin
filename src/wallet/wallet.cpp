@@ -6133,7 +6133,7 @@ bool CWallet::AddCryptedKeyInner(const CPubKey &vchPubKey, const std::vector<uns
 }
 
 // peercoin: create coin stake transaction
-typedef std::vector<unsigned char> valtype;
+/*typedef std::vector<unsigned char> valtype;
 bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, CMutableTransaction& txNew)
 {
     // The following split & combine thresholds are important to security
@@ -6360,4 +6360,4 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     // Successfully generated coinstake
     return true;
-}
+}*/

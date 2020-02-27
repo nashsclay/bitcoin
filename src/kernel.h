@@ -29,7 +29,7 @@ bool CheckStakeKernelHash(const unsigned int& nBits, CBlockIndex* pindexPrev, co
 
 // Check kernel hash target and coinstake signature
 // Sets hashProofOfStake on success return
-bool CheckProofOfStake(CValidationState &state, CBlockIndex* pindexPrev, const CTransactionRef &tx, const unsigned int& nBits, unsigned int nTimeTx, uint256& hashProofOfStake)
+bool CheckProofOfStake(CValidationState &state, CBlockIndex* pindexPrev, const CTransactionRef &tx, const unsigned int& nBits, unsigned int nTimeTx, uint256& hashProofOfStake);
 
 // Check whether the coinstake timestamp meets protocol
 bool CheckCoinStakeTimestamp(int64_t nTimeBlock, int64_t nTimeTx);

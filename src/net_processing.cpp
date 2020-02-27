@@ -1367,6 +1367,15 @@ void RelayTransaction(const uint256& txid, const CConnman& connman)
     });
 }
 
+void RelayInv(const CInv& inv, const CConnman& connman, const int minProtoVersion)
+{
+    connman.ForEachNode([&inv, &minProtoVersion](CNode* pnode)
+    {
+        if (pnode->nVersion >= minProtoVersion)
+            pnode->PushInventory(inv);
+    });
+}
+
 static void RelayAddress(const CAddress& addr, bool fReachable, CConnman* connman)
 {
     unsigned int nRelayNodes = fReachable ? 2 : 1; // limited relaying of addresses outside our network(s)
@@ -2687,38 +2696,38 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
 
         // Process custom logic, no matter if tx will be accepted to mempool later or not
         if (strCommand == NetMsgType::TXLOCKREQUEST) {
-            if (!instantsend.ProcessTxLockRequest(txLockRequest, connman)) {
-                LogPrint("instantsend", "TXLOCKREQUEST -- failed %s\n", txLockRequest.GetHash().ToString());
+            if (!instantsend.ProcessTxLockRequest(txLockRequest, *connman)) {
+                LogPrint(BCLog::INSTANTSEND, "TXLOCKREQUEST -- failed %s\n", txLockRequest.GetHash().ToString());
                 return false;
             }
         } else if (strCommand == NetMsgType::DSTX) {
             uint256 hashTx = tx.GetHash();
             if (CPrivateSend::GetDSTX(hashTx)) {
-                LogPrint("privatesend", "DSTX -- Already have %s, skipping...\n", hashTx.ToString());
+                LogPrint(BCLog::PRIVATESEND, "DSTX -- Already have %s, skipping...\n", hashTx.ToString());
                 return true; // not an error
             }
 
             CMasternode mn;
 
             if (!mnodeman.Get(dstx.masternodeOutpoint, mn)) {
-                LogPrint("privatesend", "DSTX -- Can't find masternode %s to verify %s\n", dstx.masternodeOutpoint.ToStringShort(), hashTx.ToString());
+                LogPrint(BCLog::PRIVATESEND, "DSTX -- Can't find masternode %s to verify %s\n", dstx.masternodeOutpoint.ToString(), hashTx.ToString());
                 return false;
             }
 
             if (!mn.fAllowMixingTx) {
-                LogPrint("privatesend", "DSTX -- Masternode %s is sending too many transactions %s\n", dstx.masternodeOutpoint.ToStringShort(), hashTx.ToString());
+                LogPrint(BCLog::PRIVATESEND, "DSTX -- Masternode %s is sending too many transactions %s\n", dstx.masternodeOutpoint.ToString(), hashTx.ToString());
                 return true;
                 // TODO: Not an error? Could it be that someone is relaying old DSTXes
                 // we have no idea about (e.g we were offline)? How to handle them?
             }
 
             if (!dstx.CheckSignature(mn.pubKeyMasternode)) {
-                LogPrint("privatesend", "DSTX -- CheckSignature() failed for %s\n", hashTx.ToString());
+                LogPrint(BCLog::PRIVATESEND, "DSTX -- CheckSignature() failed for %s\n", hashTx.ToString());
                 return false;
             }
 
             LogPrintf("DSTX -- Got Masternode transaction %s\n", hashTx.ToString());
-            mempool.PrioritiseTransaction(hashTx, hashTx.ToString(), 1000, 0.1*COIN);
+            mempool.PrioritiseTransaction(hashTx, 0.1*COIN);
             mnodeman.DisallowMixing(dstx.masternodeOutpoint);
         }
 
@@ -2736,13 +2745,13 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
             // Process custom txes, this changes AlreadyHave to "true"
             if (strCommand == NetMsgType::DSTX) {
                 LogPrintf("DSTX -- Masternode transaction accepted, txid=%s, peer=%d\n",
-                        tx.GetHash().ToString(), pfrom->id);
+                        tx.GetHash().ToString(), pfrom->GetId());
                 CPrivateSend::AddDSTX(dstx);
             } else if (strCommand == NetMsgType::TXLOCKREQUEST) {
                 LogPrintf("TXLOCKREQUEST -- Transaction Lock Request accepted, txid=%s, peer=%d\n",
-                        tx.GetHash().ToString(), pfrom->id);
+                        tx.GetHash().ToString(), pfrom->GetId());
                 instantsend.AcceptLockRequest(txLockRequest);
-                instantsend.Vote(tx.GetHash(), connman);
+                instantsend.Vote(tx.GetHash(), *connman);
             }
 
             mempool.check(&::ChainstateActive().CoinsTip());
@@ -3485,15 +3494,15 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
     if (found) {
         //probably one the extensions
 #ifdef ENABLE_WALLET
-        privateSendClient.ProcessMessage(pfrom, strCommand, vRecv, connman);
+        privateSendClient.ProcessMessage(pfrom, strCommand, vRecv, *connman);
 #endif // ENABLE_WALLET
-        privateSendServer.ProcessMessage(pfrom, strCommand, vRecv, connman);
-        mnodeman.ProcessMessage(pfrom, strCommand, vRecv, connman);
-        mnpayments.ProcessMessage(pfrom, strCommand, vRecv, connman);
-        instantsend.ProcessMessage(pfrom, strCommand, vRecv, connman);
-        sporkManager.ProcessSpork(pfrom, strCommand, vRecv, connman);
+        privateSendServer.ProcessMessage(pfrom, strCommand, vRecv, *connman);
+        mnodeman.ProcessMessage(pfrom, strCommand, vRecv, *connman);
+        mnpayments.ProcessMessage(pfrom, strCommand, vRecv, *connman);
+        instantsend.ProcessMessage(pfrom, strCommand, vRecv, *connman);
+        sporkManager.ProcessSpork(pfrom, strCommand, vRecv, *connman);
         masternodeSync.ProcessMessage(pfrom, strCommand, vRecv);
-        governance.ProcessMessage(pfrom, strCommand, vRecv, connman);
+        governance.ProcessMessage(pfrom, strCommand, vRecv, *connman);
     } else {
         // Ignore unknown commands for extensibility
         LogPrint(BCLog::NET, "Unknown command \"%s\" from peer=%d\n", SanitizeString(strCommand), pfrom->GetId());

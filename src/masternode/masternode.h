@@ -6,8 +6,9 @@
 #define MASTERNODE_H
 
 #include "key.h"
-#include "validation.h"
+#include "net_processing.h"
 #include "spork.h"
+#include "validation.h"
 
 class CMasternode;
 class CMasternodeBroadcast;
@@ -496,7 +497,7 @@ public:
     void Relay() const
     {
         CInv inv(MSG_MASTERNODE_VERIFY, GetHash());
-        g_connman->RelayInv(inv);
+        RelayInv(inv, *g_connman);
     }
 };
 
