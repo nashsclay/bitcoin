@@ -9,6 +9,7 @@
 #include "base58.h"
 #include "governance.h"
 #include "key.h"
+#include "key_io.h"
 #include "script/standard.h"
 #include "util/system.h"
 
@@ -96,28 +97,27 @@ public:
          nAmount(0)
     {}
 
-    CGovernancePayment(CBitcoinAddress addrIn, CAmount nAmountIn)
+    CGovernancePayment(CTxDestination destIn, CAmount nAmountIn)
         :fValid(false),
          script(),
          nAmount(0)
     {
-        try
-        {
-            CTxDestination dest = addrIn.Get();
-            script = GetScriptForDestination(dest);
+        //try
+        //{
+            script = GetScriptForDestination(destIn);
             nAmount = nAmountIn;
-            fValid = true;
-        }
-        catch(std::exception& e)
+            fValid = true; //IsValidDestination(destIn);
+        //}
+        /*catch(std::exception& e)
         {
-            LogPrintf("CGovernancePayment Payment not valid: addrIn = %s, nAmountIn = %d, what = %s\n",
-                     addrIn.ToString(), nAmountIn, e.what());
+            LogPrintf("CGovernancePayment Payment not valid: destIn = %s, nAmountIn = %d, what = %s\n",
+                     EncodeDestination(destIn), nAmountIn, e.what());
         }
         catch(...)
         {
-            LogPrintf("CGovernancePayment Payment not valid: addrIn = %s, nAmountIn = %d\n",
-                      addrIn.ToString(), nAmountIn);
-        }
+            LogPrintf("CGovernancePayment Payment not valid: destIn = %s, nAmountIn = %d\n",
+                      EncodeDestination(destIn), nAmountIn);
+        }*/
     }
 
     bool IsValid() { return fValid; }

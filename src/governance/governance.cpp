@@ -18,6 +18,7 @@
 #include "util/system.h"
 
 CGovernanceManager governance;
+extern void Misbehaving(NodeId nodeid, int howmuch, const std::string& message="");
 
 int nSubmittedFinalBudget;
 
@@ -135,7 +136,10 @@ void CGovernanceManager::ProcessMessage(CNode* pfrom, const std::string& strComm
 
         uint256 nHash = govobj.GetHash();
 
-        pfrom->setAskFor.erase(nHash);
+        LOCK2(cs_main, cs);
+
+        CInv inv(MSG_GOVERNANCE_OBJECT, nHash);
+        EraseInv(inv, pfrom);
 
         if(pfrom->nVersion < MIN_GOVERNANCE_PEER_PROTO_VERSION) {
             LogPrint(BCLog::GOBJECT, "MNGOVERNANCEOBJECT -- peer=%d using obsolete version %i\n", pfrom->GetId(), pfrom->nVersion);
@@ -157,8 +161,6 @@ void CGovernanceManager::ProcessMessage(CNode* pfrom, const std::string& strComm
             LogPrintf("MNGOVERNANCEOBJECT -- Received unrequested object: %s\n", strHash);
             return;
         }
-
-        LOCK2(cs_main, cs);
 
         if(mapObjects.count(nHash) || mapPostponedObjects.count(nHash) ||
            mapErasedGovernanceObjects.count(nHash) || mapMasternodeOrphanObjects.count(nHash)) {
@@ -194,8 +196,7 @@ void CGovernanceManager::ProcessMessage(CNode* pfrom, const std::string& strComm
                 if (count >= 10) {
                     LogPrint(BCLog::GOBJECT, "MNGOVERNANCEOBJECT -- Too many orphan objects, missing masternode=%s\n", govobj.GetMasternodeOutpoint().ToString());
                     // ask for this object again in 2 minutes
-                    CInv inv(MSG_GOVERNANCE_OBJECT, govobj.GetHash());
-                    pfrom->AskFor(inv);
+                    AskForInv(inv, pfrom);
                     return;
                 }
 
@@ -226,7 +227,10 @@ void CGovernanceManager::ProcessMessage(CNode* pfrom, const std::string& strComm
 
         uint256 nHash = vote.GetHash();
 
-        pfrom->setAskFor.erase(nHash);
+        LOCK(cs_main);
+
+        CInv inv(MSG_GOVERNANCE_OBJECT_VOTE, nHash);
+        EraseInv(inv, pfrom);
 
         if(pfrom->nVersion < MIN_GOVERNANCE_PEER_PROTO_VERSION) {
             LogPrint(BCLog::GOBJECT, "MNGOVERNANCEOBJECTVOTE -- peer=%d using obsolete version %i\n", pfrom->GetId(), pfrom->nVersion);
@@ -259,7 +263,6 @@ void CGovernanceManager::ProcessMessage(CNode* pfrom, const std::string& strComm
         else {
             LogPrint(BCLog::GOBJECT, "MNGOVERNANCEOBJECTVOTE -- Rejected vote, error = %s\n", exception.what());
             if((exception.GetNodePenalty() != 0) && masternodeSync.IsSynced()) {
-                LOCK(cs_main);
                 Misbehaving(pfrom->GetId(), exception.GetNodePenalty());
             }
             return;
@@ -1111,8 +1114,8 @@ int CGovernanceManager::RequestGovernanceObjectVotes(const std::vector<CNode*>& 
 
     FastRandomContext insecure_rand;
     // shuffle pointers
-    std::random_shuffle(vpGovObjsTriggersTmp.begin(), vpGovObjsTriggersTmp.end(), insecure_rand);
-    std::random_shuffle(vpGovObjsTmp.begin(), vpGovObjsTmp.end(), insecure_rand);
+    std::shuffle(vpGovObjsTriggersTmp.begin(), vpGovObjsTriggersTmp.end(), insecure_rand);
+    std::shuffle(vpGovObjsTmp.begin(), vpGovObjsTmp.end(), insecure_rand);
 
     for (int i = 0; i < nMaxObjRequestsPerNode; ++i) {
         uint256 nHashGovobj;
@@ -1134,8 +1137,7 @@ int CGovernanceManager::RequestGovernanceObjectVotes(const std::vector<CNode*>& 
             // only use up to date peers
             if(pnode->nVersion < MIN_GOVERNANCE_PEER_PROTO_VERSION) continue;
             // stop early to prevent setAskFor overflow
-            size_t nProjectedSize = pnode->setAskFor.size() + nProjectedVotes;
-            if(nProjectedSize > SETASKFOR_MAX_SZ/2) continue;
+            if(PotentialAskForOverflow(nProjectedVotes, pnode)) continue;
             // to early to ask the same node
             if(mapAskedRecently[nHashGovobj].count(pnode->addr)) continue;
 
@@ -1282,12 +1284,12 @@ UniValue CGovernanceManager::ToJson() const
     }
 
     UniValue jsonObj(UniValue::VOBJ);
-    jsonObj.push_back(Pair("objects_total", (int)mapObjects.size()));
-    jsonObj.push_back(Pair("proposals", nProposalCount));
-    jsonObj.push_back(Pair("triggers", nTriggerCount));
-    jsonObj.push_back(Pair("other", nOtherCount));
-    jsonObj.push_back(Pair("erased", (int)mapErasedGovernanceObjects.size()));
-    jsonObj.push_back(Pair("votes", (int)cmapVoteToObject.GetSize()));
+    jsonObj.pushKV("objects_total", (int)mapObjects.size());
+    jsonObj.pushKV("proposals", nProposalCount);
+    jsonObj.pushKV("triggers", nTriggerCount);
+    jsonObj.pushKV("other", nOtherCount);
+    jsonObj.pushKV("erased", (int)mapErasedGovernanceObjects.size());
+    jsonObj.pushKV("votes", (int)cmapVoteToObject.GetSize());
     return jsonObj;
 }
 
@@ -1312,8 +1314,6 @@ void CGovernanceManager::UpdatedBlockTip(const CBlockIndex *pindex, CConnman& co
 
 void CGovernanceManager::RequestOrphanObjects(CConnman& connman)
 {
-    std::vector<CNode*> vNodesCopy = connman.CopyNodeVector(CConnman::FullyConnectedOnly);
-
     std::vector<uint256> vecHashesFiltered;
     {
         std::vector<uint256> vecHashes;
@@ -1330,16 +1330,12 @@ void CGovernanceManager::RequestOrphanObjects(CConnman& connman)
     LogPrint(BCLog::GOBJECT, "CGovernanceObject::RequestOrphanObjects -- number objects = %d\n", vecHashesFiltered.size());
     for(size_t i = 0; i < vecHashesFiltered.size(); ++i) {
         const uint256& nHash = vecHashesFiltered[i];
-        for(size_t j = 0; j < vNodesCopy.size(); ++j) {
-            CNode* pnode = vNodesCopy[j];
-            if(pnode->fMasternode) {
-                continue;
-            }
-            RequestGovernanceObject(pnode, nHash, connman);
-        }
+        connman.ForEachNode([&](CNode* pnode)
+        {
+            if (!pnode->fMasternode)
+                RequestGovernanceObject(pnode, nHash, connman);
+        });
     }
-
-    connman.ReleaseNodeVector(vNodesCopy);
 }
 
 void CGovernanceManager::CleanOrphanObjects()

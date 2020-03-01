@@ -59,7 +59,7 @@ void CInstantSend::ProcessMessage(CNode* pfrom, const std::string& strCommand, C
     if (strCommand == NetMsgType::TXLOCKVOTE) // InstantSend Transaction Lock Consensus Votes
     {
         if(pfrom->nVersion < MIN_INSTANTSEND_PROTO_VERSION) {
-            LogPrint("instantsend", "TXLOCKVOTE -- peer=%d using obsolete version %i\n", pfrom->id, pfrom->nVersion);
+            LogPrint(BCLog::INSTANTSEND, "TXLOCKVOTE -- peer=%d using obsolete version %i\n", pfrom->GetId(), pfrom->nVersion);
             connman.PushMessage(pfrom, CNetMsgMaker(pfrom->GetSendVersion()).Make(NetMsgType::REJECT, strCommand, REJECT_OBSOLETE,
                                strprintf("Version must be %d or greater", MIN_INSTANTSEND_PROTO_VERSION)));
             return;
@@ -115,7 +115,7 @@ bool CInstantSend::ProcessTxLockRequest(const CTxLockRequest& txLockRequest, CCo
         if(it != mapVotedOutpoints.end()) {
             for (const auto& hash : it->second) {
                 if(hash != txLockRequest.GetHash()) {
-                    LogPrint("instantsend", "CInstantSend::ProcessTxLockRequest -- Double spend attempt! %s\n", txin.prevout.ToStringShort());
+                    LogPrint(BCLog::INSTANTSEND, "CInstantSend::ProcessTxLockRequest -- Double spend attempt! %s\n", txin.prevout.ToString());
                     // do not fail here, let it go and see which one will get the votes to be locked
                     // TODO: notify zmq+script
                 }
@@ -172,7 +172,7 @@ bool CInstantSend::CreateTxLockCandidate(const CTxLockRequest& txLockRequest)
             itLockCandidate->second.AddOutPointLock(txin.prevout);
         }
     } else {
-        LogPrint("instantsend", "CInstantSend::CreateTxLockCandidate -- seen, txid=%s\n", txHash.ToString());
+        LogPrint(BCLog::INSTANTSEND, "CInstantSend::CreateTxLockCandidate -- seen, txid=%s\n", txHash.ToString());
     }
 
     return true;
@@ -227,7 +227,7 @@ void CInstantSend::Vote(CTxLockCandidate& txLockCandidate, CConnman& connman)
 
         int nPrevoutHeight = GetUTXOHeight(itOutpointLock->first);
         if(nPrevoutHeight == -1) {
-            LogPrint("instantsend", "CInstantSend::Vote -- Failed to find UTXO %s\n", itOutpointLock->first.ToStringShort());
+            LogPrint(BCLog::INSTANTSEND, "CInstantSend::Vote -- Failed to find UTXO %s\n", itOutpointLock->first.ToString());
             return;
         }
 
@@ -236,19 +236,19 @@ void CInstantSend::Vote(CTxLockCandidate& txLockCandidate, CConnman& connman)
         int nRank;
         int nMinRequiredProtocol = std::max(MIN_INSTANTSEND_PROTO_VERSION, mnpayments.GetMinMasternodePaymentsProto());
         if(!mnodeman.GetMasternodeRank(activeMasternode.outpoint, nRank, nLockInputHeight, nMinRequiredProtocol)) {
-            LogPrint("instantsend", "CInstantSend::Vote -- Can't calculate rank for masternode %s\n", activeMasternode.outpoint.ToStringShort());
+            LogPrint(BCLog::INSTANTSEND, "CInstantSend::Vote -- Can't calculate rank for masternode %s\n", activeMasternode.outpoint.ToString());
             ++itOutpointLock;
             continue;
         }
 
         int nSignaturesTotal = COutPointLock::SIGNATURES_TOTAL;
         if(nRank > nSignaturesTotal) {
-            LogPrint("instantsend", "CInstantSend::Vote -- Masternode not in the top %d (%d)\n", nSignaturesTotal, nRank);
+            LogPrint(BCLog::INSTANTSEND, "CInstantSend::Vote -- Masternode not in the top %d (%d)\n", nSignaturesTotal, nRank);
             ++itOutpointLock;
             continue;
         }
 
-        LogPrint("instantsend", "CInstantSend::Vote -- In the top %d (%d)\n", nSignaturesTotal, nRank);
+        LogPrint(BCLog::INSTANTSEND, "CInstantSend::Vote -- In the top %d (%d)\n", nSignaturesTotal, nRank);
 
         std::map<COutPoint, std::set<uint256> >::iterator itVoted = mapVotedOutpoints.find(itOutpointLock->first);
 
@@ -263,7 +263,7 @@ void CInstantSend::Vote(CTxLockCandidate& txLockCandidate, CConnman& connman)
                     // skip it anyway
                     fAlreadyVoted = true;
                     LogPrintf("CInstantSend::Vote -- WARNING: We already voted for this outpoint, skipping: txHash=%s, outpoint=%s\n",
-                            txHash.ToString(), itOutpointLock->first.ToStringShort());
+                            txHash.ToString(), itOutpointLock->first.ToString());
                     break;
                 }
             }
@@ -290,7 +290,7 @@ void CInstantSend::Vote(CTxLockCandidate& txLockCandidate, CConnman& connman)
         mapTxLockVotes.insert(std::make_pair(nVoteHash, vote));
         if(itOutpointLock->second.AddVote(vote)) {
             LogPrintf("CInstantSend::Vote -- Vote created successfully, relaying: txHash=%s, outpoint=%s, vote=%s\n",
-                    txHash.ToString(), itOutpointLock->first.ToStringShort(), nVoteHash.ToString());
+                    txHash.ToString(), itOutpointLock->first.ToString(), nVoteHash.ToString());
 
             if(itVoted == mapVotedOutpoints.end()) {
                 std::set<uint256> setHashes;
@@ -301,7 +301,7 @@ void CInstantSend::Vote(CTxLockCandidate& txLockCandidate, CConnman& connman)
                 if(mapVotedOutpoints[itOutpointLock->first].size() > 1) {
                     // it's ok to continue, just warn user
                     LogPrintf("CInstantSend::Vote -- WARNING: Vote conflicts with some existing votes: txHash=%s, outpoint=%s, vote=%s\n",
-                            txHash.ToString(), itOutpointLock->first.ToStringShort(), nVoteHash.ToString());
+                            txHash.ToString(), itOutpointLock->first.ToString(), nVoteHash.ToString());
                 }
             }
 
@@ -319,7 +319,7 @@ bool CInstantSend::ProcessNewTxLockVote(CNode* pfrom, const CTxLockVote& vote, C
 
     if(!vote.IsValid(pfrom, connman)) {
         // could be because of missing MN
-        LogPrint("instantsend", "CInstantSend::%s -- Vote is invalid, txid=%s\n", __func__, txHash.ToString());
+        LogPrint(BCLog::INSTANTSEND, "CInstantSend::%s -- Vote is invalid, txid=%s\n", __func__, txHash.ToString());
         return false;
     }
 
@@ -343,8 +343,8 @@ bool CInstantSend::ProcessNewTxLockVote(CNode* pfrom, const CTxLockVote& vote, C
             CreateEmptyTxLockCandidate(txHash);
         }
         bool fInserted = mapTxLockVotesOrphan.emplace(nVoteHash, vote).second;
-        LogPrint("instantsend", "CInstantSend::%s -- Orphan vote: txid=%s  masternode=%s %s\n",
-                __func__, txHash.ToString(), vote.GetMasternodeOutpoint().ToStringShort(), fInserted ? "new" : "seen");
+        LogPrint(BCLog::INSTANTSEND, "CInstantSend::%s -- Orphan vote: txid=%s  masternode=%s %s\n",
+                __func__, txHash.ToString(), vote.GetMasternodeOutpoint().ToString(), fInserted ? "new" : "seen");
 
         // This tracks those messages and allows only the same rate as of the rest of the network
         // TODO: make sure this works good enough for multi-quorum
@@ -355,9 +355,9 @@ bool CInstantSend::ProcessNewTxLockVote(CNode* pfrom, const CTxLockVote& vote, C
             mapMasternodeOrphanVotes.emplace(vote.GetMasternodeOutpoint(), nMasternodeOrphanExpireTime);
         } else {
             if(itMnOV->second > GetTime() && itMnOV->second > GetAverageMasternodeOrphanVoteTime()) {
-                LogPrint("instantsend", "CInstantSend::%s -- masternode is spamming orphan Transaction Lock Votes: txid=%s  masternode=%s\n",
-                        __func__, txHash.ToString(), vote.GetMasternodeOutpoint().ToStringShort());
-                // Misbehaving(pfrom->id, 1);
+                LogPrint(BCLog::INSTANTSEND, "CInstantSend::%s -- masternode is spamming orphan Transaction Lock Votes: txid=%s  masternode=%s\n",
+                        __func__, txHash.ToString(), vote.GetMasternodeOutpoint().ToString());
+                // Misbehaving(pfrom->GetId(), 1);
                 return false;
             }
             // not spamming, refresh
@@ -371,11 +371,11 @@ bool CInstantSend::ProcessNewTxLockVote(CNode* pfrom, const CTxLockVote& vote, C
     CTxLockCandidate& txLockCandidate = it->second;
 
     if (txLockCandidate.IsTimedOut()) {
-        LogPrint("instantsend", "CInstantSend::%s -- too late, Transaction Lock timed out, txid=%s\n", __func__, txHash.ToString());
+        LogPrint(BCLog::INSTANTSEND, "CInstantSend::%s -- too late, Transaction Lock timed out, txid=%s\n", __func__, txHash.ToString());
         return false;
     }
 
-    LogPrint("instantsend", "CInstantSend::%s -- Transaction Lock Vote, txid=%s\n", __func__, txHash.ToString());
+    LogPrint(BCLog::INSTANTSEND, "CInstantSend::%s -- Transaction Lock Vote, txid=%s\n", __func__, txHash.ToString());
 
     UpdateVotedOutpoints(vote, txLockCandidate);
 
@@ -386,7 +386,7 @@ bool CInstantSend::ProcessNewTxLockVote(CNode* pfrom, const CTxLockVote& vote, C
 
     int nSignatures = txLockCandidate.CountVotes();
     int nSignaturesMax = txLockCandidate.txLockRequest.GetMaxSignatures();
-    LogPrint("instantsend", "CInstantSend::%s -- Transaction Lock signatures count: %d/%d, vote hash=%s\n", __func__,
+    LogPrint(BCLog::INSTANTSEND, "CInstantSend::%s -- Transaction Lock signatures count: %d/%d, vote hash=%s\n", __func__,
             nSignatures, nSignaturesMax, nVoteHash.ToString());
 
     TryToFinalizeLockCandidate(txLockCandidate);
@@ -414,11 +414,11 @@ bool CInstantSend::ProcessOrphanTxLockVote(const CTxLockVote& vote)
     CTxLockCandidate& txLockCandidate = it->second;
 
     if (txLockCandidate.IsTimedOut()) {
-        LogPrint("instantsend", "CInstantSend::%s -- too late, Transaction Lock timed out, txid=%s\n", __func__, txHash.ToString());
+        LogPrint(BCLog::INSTANTSEND, "CInstantSend::%s -- too late, Transaction Lock timed out, txid=%s\n", __func__, txHash.ToString());
         return false;
     }
 
-    LogPrint("instantsend", "CInstantSend::%s -- Transaction Lock Vote, txid=%s\n", __func__, txHash.ToString());
+    LogPrint(BCLog::INSTANTSEND, "CInstantSend::%s -- Transaction Lock Vote, txid=%s\n", __func__, txHash.ToString());
 
     UpdateVotedOutpoints(vote, txLockCandidate);
 
@@ -429,7 +429,7 @@ bool CInstantSend::ProcessOrphanTxLockVote(const CTxLockVote& vote)
 
     int nSignatures = txLockCandidate.CountVotes();
     int nSignaturesMax = txLockCandidate.txLockRequest.GetMaxSignatures();
-    LogPrint("instantsend", "CInstantSend::%s -- Transaction Lock signatures count: %d/%d, vote hash=%s\n",
+    LogPrint(BCLog::INSTANTSEND, "CInstantSend::%s -- Transaction Lock signatures count: %d/%d, vote hash=%s\n",
             __func__, nSignatures, nSignaturesMax, vote.GetHash().ToString());
 
     return true;
@@ -451,7 +451,7 @@ void CInstantSend::UpdateVotedOutpoints(const CTxLockVote& vote, CTxLockCandidat
                 std::map<uint256, CTxLockCandidate>::iterator it2 = mapTxLockCandidates.find(hash);
                 if(it2 !=mapTxLockCandidates.end() && it2->second.HasMasternodeVoted(vote.GetOutpoint(), vote.GetMasternodeOutpoint())) {
                     // yes, it was the same masternode
-                    LogPrintf("CInstantSend::%s -- masternode sent conflicting votes! %s\n", __func__, vote.GetMasternodeOutpoint().ToStringShort());
+                    LogPrintf("CInstantSend::%s -- masternode sent conflicting votes! %s\n", __func__, vote.GetMasternodeOutpoint().ToString());
                     // mark both Lock Candidates as attacked, none of them should complete,
                     // or at least the new (current) one shouldn't even
                     // if the second one was already completed earlier
@@ -497,7 +497,7 @@ void CInstantSend::TryToFinalizeLockCandidate(const CTxLockCandidate& txLockCand
     uint256 txHash = txLockCandidate.txLockRequest.tx->GetHash();
     if(txLockCandidate.IsAllOutPointsReady() && !IsLockedInstantSendTransaction(txHash)) {
         // we have enough votes now
-        LogPrint("instantsend", "CInstantSend::TryToFinalizeLockCandidate -- Transaction Lock is ready to complete, txid=%s\n", txHash.ToString());
+        LogPrint(BCLog::INSTANTSEND, "CInstantSend::TryToFinalizeLockCandidate -- Transaction Lock is ready to complete, txid=%s\n", txHash.ToString());
         if(ResolveConflicts(txLockCandidate)) {
             LockTransactionInputs(txLockCandidate);
             UpdateLockedTransaction(txLockCandidate);
@@ -534,7 +534,7 @@ void CInstantSend::UpdateLockedTransaction(const CTxLockCandidate& txLockCandida
 
     GetMainSignals().NotifyTransactionLock(*txLockCandidate.txLockRequest.tx);
 
-    LogPrint("instantsend", "CInstantSend::UpdateLockedTransaction -- done, txid=%s\n", txHash.ToString());
+    LogPrint(BCLog::INSTANTSEND, "CInstantSend::UpdateLockedTransaction -- done, txid=%s\n", txHash.ToString());
 }
 
 void CInstantSend::LockTransactionInputs(const CTxLockCandidate& txLockCandidate)
@@ -553,7 +553,7 @@ void CInstantSend::LockTransactionInputs(const CTxLockCandidate& txLockCandidate
         mapLockedOutpoints.insert(std::make_pair(it->first, txHash));
         ++it;
     }
-    LogPrint("instantsend", "CInstantSend::LockTransactionInputs -- done, txid=%s\n", txHash.ToString());
+    LogPrint(BCLog::INSTANTSEND, "CInstantSend::LockTransactionInputs -- done, txid=%s\n", txHash.ToString());
 }
 
 bool CInstantSend::GetLockedOutPointTxHash(const COutPoint& outpoint, uint256& hashRet)
@@ -624,7 +624,7 @@ bool CInstantSend::ResolveConflicts(const CTxLockCandidate& txLockCandidate)
     CTransactionRef txTmp;
     uint256 hashBlock;
     if(GetTransaction(txHash, txTmp, Params().GetConsensus(), hashBlock, true) && hashBlock != uint256()) {
-        LogPrint("instantsend", "CInstantSend::ResolveConflicts -- Done, %s is included in block %s\n", txHash.ToString(), hashBlock.ToString());
+        LogPrint(BCLog::INSTANTSEND, "CInstantSend::ResolveConflicts -- Done, %s is included in block %s\n", txHash.ToString(), hashBlock.ToString());
         return true;
     }
     // Not in block yet, make sure all its inputs are still unspent
@@ -632,11 +632,11 @@ bool CInstantSend::ResolveConflicts(const CTxLockCandidate& txLockCandidate)
         Coin coin;
         if(!GetUTXOCoin(txin.prevout, coin)) {
             // Not in UTXO anymore? A conflicting tx was mined while we were waiting for votes.
-            LogPrintf("CInstantSend::ResolveConflicts -- ERROR: Failed to find UTXO %s, can't complete Transaction Lock\n", txin.prevout.ToStringShort());
+            LogPrintf("CInstantSend::ResolveConflicts -- ERROR: Failed to find UTXO %s, can't complete Transaction Lock\n", txin.prevout.ToString());
             return false;
         }
     }
-    LogPrint("instantsend", "CInstantSend::ResolveConflicts -- Done, txid=%s\n", txHash.ToString());
+    LogPrint(BCLog::INSTANTSEND, "CInstantSend::ResolveConflicts -- Done, txid=%s\n", txHash.ToString());
 
     return true;
 }
@@ -690,8 +690,8 @@ void CInstantSend::CheckAndRemove()
     std::map<uint256, CTxLockVote>::iterator itVote = mapTxLockVotes.begin();
     while(itVote != mapTxLockVotes.end()) {
         if(itVote->second.IsExpired(nCachedBlockHeight)) {
-            LogPrint("instantsend", "CInstantSend::CheckAndRemove -- Removing expired vote: txid=%s  masternode=%s\n",
-                    itVote->second.GetTxHash().ToString(), itVote->second.GetMasternodeOutpoint().ToStringShort());
+            LogPrint(BCLog::INSTANTSEND, "CInstantSend::CheckAndRemove -- Removing expired vote: txid=%s  masternode=%s\n",
+                    itVote->second.GetTxHash().ToString(), itVote->second.GetMasternodeOutpoint().ToString());
             mapTxLockVotes.erase(itVote++);
         } else {
             ++itVote;
@@ -702,8 +702,8 @@ void CInstantSend::CheckAndRemove()
     std::map<uint256, CTxLockVote>::iterator itOrphanVote = mapTxLockVotesOrphan.begin();
     while(itOrphanVote != mapTxLockVotesOrphan.end()) {
         if(itOrphanVote->second.IsTimedOut()) {
-            LogPrint("instantsend", "CInstantSend::CheckAndRemove -- Removing timed out orphan vote: txid=%s  masternode=%s\n",
-                    itOrphanVote->second.GetTxHash().ToString(), itOrphanVote->second.GetMasternodeOutpoint().ToStringShort());
+            LogPrint(BCLog::INSTANTSEND, "CInstantSend::CheckAndRemove -- Removing timed out orphan vote: txid=%s  masternode=%s\n",
+                    itOrphanVote->second.GetTxHash().ToString(), itOrphanVote->second.GetMasternodeOutpoint().ToString());
             mapTxLockVotes.erase(itOrphanVote->first);
             mapTxLockVotesOrphan.erase(itOrphanVote++);
         } else {
@@ -715,8 +715,8 @@ void CInstantSend::CheckAndRemove()
     itVote = mapTxLockVotes.begin();
     while(itVote != mapTxLockVotes.end()) {
         if(itVote->second.IsFailed()) {
-            LogPrint("instantsend", "CInstantSend::CheckAndRemove -- Removing vote for failed lock attempt: txid=%s  masternode=%s\n",
-                    itVote->second.GetTxHash().ToString(), itVote->second.GetMasternodeOutpoint().ToStringShort());
+            LogPrint(BCLog::INSTANTSEND, "CInstantSend::CheckAndRemove -- Removing vote for failed lock attempt: txid=%s  masternode=%s\n",
+                    itVote->second.GetTxHash().ToString(), itVote->second.GetMasternodeOutpoint().ToString());
             mapTxLockVotes.erase(itVote++);
         } else {
             ++itVote;
@@ -727,8 +727,8 @@ void CInstantSend::CheckAndRemove()
     std::map<COutPoint, int64_t>::iterator itMasternodeOrphan = mapMasternodeOrphanVotes.begin();
     while(itMasternodeOrphan != mapMasternodeOrphanVotes.end()) {
         if(itMasternodeOrphan->second < GetTime()) {
-            LogPrint("instantsend", "CInstantSend::CheckAndRemove -- Removing timed out orphan masternode vote: masternode=%s\n",
-                    itMasternodeOrphan->first.ToStringShort());
+            LogPrint(BCLog::INSTANTSEND, "CInstantSend::CheckAndRemove -- Removing timed out orphan masternode vote: masternode=%s\n",
+                    itMasternodeOrphan->first.ToString());
             mapMasternodeOrphanVotes.erase(itMasternodeOrphan++);
         } else {
             ++itMasternodeOrphan;
@@ -887,12 +887,12 @@ void CInstantSend::SyncTransaction(const CTransaction& tx, const CBlockIndex *pi
     // When tx is 0-confirmed or conflicted, posInBlock is SYNC_TRANSACTION_NOT_IN_BLOCK and nHeightNew should be set to -1
     int nHeightNew = posInBlock == CMainSignals::SYNC_TRANSACTION_NOT_IN_BLOCK ? -1 : pindex->nHeight;
 
-    LogPrint("instantsend", "CInstantSend::SyncTransaction -- txid=%s nHeightNew=%d\n", txHash.ToString(), nHeightNew);
+    LogPrint(BCLog::INSTANTSEND, "CInstantSend::SyncTransaction -- txid=%s nHeightNew=%d\n", txHash.ToString(), nHeightNew);
 
     // Check lock candidates
     std::map<uint256, CTxLockCandidate>::iterator itLockCandidate = mapTxLockCandidates.find(txHash);
     if(itLockCandidate != mapTxLockCandidates.end()) {
-        LogPrint("instantsend", "CInstantSend::SyncTransaction -- txid=%s nHeightNew=%d lock candidate updated\n",
+        LogPrint(BCLog::INSTANTSEND, "CInstantSend::SyncTransaction -- txid=%s nHeightNew=%d lock candidate updated\n",
                 txHash.ToString(), nHeightNew);
         itLockCandidate->second.SetConfirmedHeight(nHeightNew);
         // Loop through outpoint locks
@@ -904,7 +904,7 @@ void CInstantSend::SyncTransaction(const CTransaction& tx, const CBlockIndex *pi
             std::map<uint256, CTxLockVote>::iterator it;
             while(itVote != vVotes.end()) {
                 uint256 nVoteHash = itVote->GetHash();
-                LogPrint("instantsend", "CInstantSend::SyncTransaction -- txid=%s nHeightNew=%d vote %s updated\n",
+                LogPrint(BCLog::INSTANTSEND, "CInstantSend::SyncTransaction -- txid=%s nHeightNew=%d vote %s updated\n",
                         txHash.ToString(), nHeightNew, nVoteHash.ToString());
                 it = mapTxLockVotes.find(nVoteHash);
                 if(it != mapTxLockVotes.end()) {
@@ -920,7 +920,7 @@ void CInstantSend::SyncTransaction(const CTransaction& tx, const CBlockIndex *pi
     std::map<uint256, CTxLockVote>::iterator itOrphanVote = mapTxLockVotesOrphan.begin();
     while(itOrphanVote != mapTxLockVotesOrphan.end()) {
         if(itOrphanVote->second.GetTxHash() == txHash) {
-            LogPrint("instantsend", "CInstantSend::SyncTransaction -- txid=%s nHeightNew=%d vote %s updated\n",
+            LogPrint(BCLog::INSTANTSEND, "CInstantSend::SyncTransaction -- txid=%s nHeightNew=%d vote %s updated\n",
                     txHash.ToString(), nHeightNew, itOrphanVote->first.ToString());
             mapTxLockVotes[itOrphanVote->first].SetConfirmedHeight(nHeightNew);
         }
@@ -943,12 +943,12 @@ bool CTxLockRequest::IsValid() const
     if(tx->vout.size() < 1) return false;
 
     if(tx->vin.size() > WARN_MANY_INPUTS) {
-        LogPrint("instantsend", "CTxLockRequest::IsValid -- WARNING: Too many inputs: tx=%s", ToString());
+        LogPrint(BCLog::INSTANTSEND, "CTxLockRequest::IsValid -- WARNING: Too many inputs: tx=%s", ToString());
     }
 
     AssertLockHeld(cs_main);
     if(!CheckFinalTx(*tx)) {
-        LogPrint("instantsend", "CTxLockRequest::IsValid -- Transaction is not final: tx=%s", ToString());
+        LogPrint(BCLog::INSTANTSEND, "CTxLockRequest::IsValid -- Transaction is not final: tx=%s", ToString());
         return false;
     }
 
@@ -961,17 +961,17 @@ bool CTxLockRequest::IsValid() const
         Coin coin;
 
         if(!GetUTXOCoin(txin.prevout, coin)) {
-            LogPrint("instantsend", "CTxLockRequest::IsValid -- Failed to find UTXO %s\n", txin.prevout.ToStringShort());
+            LogPrint(BCLog::INSTANTSEND, "CTxLockRequest::IsValid -- Failed to find UTXO %s\n", txin.prevout.ToString());
             return false;
         }
 
-        int nTxAge = chainActive.Height() - coin.nHeight + 1;
+        int nTxAge = ::ChainActive().Height() - coin.nHeight + 1;
         // 1 less than the "send IX" gui requires, in case of a block propagating the network at the time
         int nConfirmationsRequired = nInstantSendConfirmationsRequired - 1;
 
         if(nTxAge < nConfirmationsRequired) {
-            LogPrint("instantsend", "CTxLockRequest::IsValid -- outpoint %s too new: nTxAge=%d, nConfirmationsRequired=%d, txid=%s\n",
-                    txin.prevout.ToStringShort(), nTxAge, nConfirmationsRequired, GetHash().ToString());
+            LogPrint(BCLog::INSTANTSEND, "CTxLockRequest::IsValid -- outpoint %s too new: nTxAge=%d, nConfirmationsRequired=%d, txid=%s\n",
+                    txin.prevout.ToString(), nTxAge, nConfirmationsRequired, GetHash().ToString());
             return false;
         }
 
@@ -979,14 +979,14 @@ bool CTxLockRequest::IsValid() const
     }
 
     if(nValueIn > sporkManager.GetSporkValue(SPORK_5_INSTANTSEND_MAX_VALUE)*COIN) {
-        LogPrint("instantsend", "CTxLockRequest::IsValid -- Transaction value too high: nValueIn=%d, tx=%s", nValueIn, ToString());
+        LogPrint(BCLog::INSTANTSEND, "CTxLockRequest::IsValid -- Transaction value too high: nValueIn=%d, tx=%s", nValueIn, ToString());
         return false;
     }
 
     CAmount nValueOut = tx->GetValueOut();
 
     if(nValueIn - nValueOut < GetMinFee()) {
-        LogPrint("instantsend", "CTxLockRequest::IsValid -- did not include enough fees in transaction: fees=%d, tx=%s", nValueOut - nValueIn, ToString());
+        LogPrint(BCLog::INSTANTSEND, "CTxLockRequest::IsValid -- did not include enough fees in transaction: fees=%d, tx=%s", nValueOut - nValueIn, ToString());
         return false;
     }
 
@@ -1011,14 +1011,14 @@ int CTxLockRequest::GetMaxSignatures() const
 bool CTxLockVote::IsValid(CNode* pnode, CConnman& connman) const
 {
     if(!mnodeman.Has(outpointMasternode)) {
-        LogPrint("instantsend", "CTxLockVote::IsValid -- Unknown masternode %s\n", outpointMasternode.ToStringShort());
+        LogPrint(BCLog::INSTANTSEND, "CTxLockVote::IsValid -- Unknown masternode %s\n", outpointMasternode.ToString());
         mnodeman.AskForMN(pnode, outpointMasternode, connman);
         return false;
     }
 
     Coin coin;
     if(!GetUTXOCoin(outpoint, coin)) {
-        LogPrint("instantsend", "CTxLockVote::IsValid -- Failed to find UTXO %s\n", outpoint.ToStringShort());
+        LogPrint(BCLog::INSTANTSEND, "CTxLockVote::IsValid -- Failed to find UTXO %s\n", outpoint.ToString());
         return false;
     }
 
@@ -1028,15 +1028,15 @@ bool CTxLockVote::IsValid(CNode* pnode, CConnman& connman) const
     int nMinRequiredProtocol = std::max(MIN_INSTANTSEND_PROTO_VERSION, mnpayments.GetMinMasternodePaymentsProto());
     if(!mnodeman.GetMasternodeRank(outpointMasternode, nRank, nLockInputHeight, nMinRequiredProtocol)) {
         //can be caused by past versions trying to vote with an invalid protocol
-        LogPrint("instantsend", "CTxLockVote::IsValid -- Can't calculate rank for masternode %s\n", outpointMasternode.ToStringShort());
+        LogPrint(BCLog::INSTANTSEND, "CTxLockVote::IsValid -- Can't calculate rank for masternode %s\n", outpointMasternode.ToString());
         return false;
     }
-    LogPrint("instantsend", "CTxLockVote::IsValid -- Masternode %s, rank=%d\n", outpointMasternode.ToStringShort(), nRank);
+    LogPrint(BCLog::INSTANTSEND, "CTxLockVote::IsValid -- Masternode %s, rank=%d\n", outpointMasternode.ToString(), nRank);
 
     int nSignaturesTotal = COutPointLock::SIGNATURES_TOTAL;
     if(nRank > nSignaturesTotal) {
-        LogPrint("instantsend", "CTxLockVote::IsValid -- Masternode %s is not in the top %d (%d), vote hash=%s\n",
-                outpointMasternode.ToStringShort(), nSignaturesTotal, nRank, GetHash().ToString());
+        LogPrint(BCLog::INSTANTSEND, "CTxLockVote::IsValid -- Masternode %s is not in the top %d (%d), vote hash=%s\n",
+                outpointMasternode.ToString(), nSignaturesTotal, nRank, GetHash().ToString());
         return false;
     }
 
@@ -1074,7 +1074,7 @@ bool CTxLockVote::CheckSignature() const
 
         if (!CHashSigner::VerifyHash(hash, infoMn.pubKeyMasternode, vchMasternodeSignature, strError)) {
             // could be a signature in old format
-            std::string strMessage = txHash.ToString() + outpoint.ToStringShort();
+            std::string strMessage = txHash.ToString() + outpoint.ToString();
             if(!CMessageSigner::VerifyMessage(infoMn.pubKeyMasternode, vchMasternodeSignature, strMessage, strError)) {
                 // nope, not in old format either
                 LogPrintf("CTxLockVote::CheckSignature -- VerifyMessage() failed, error: %s\n", strError);
@@ -1082,7 +1082,7 @@ bool CTxLockVote::CheckSignature() const
             }
         }
     } else {
-        std::string strMessage = txHash.ToString() + outpoint.ToStringShort();
+        std::string strMessage = txHash.ToString() + outpoint.ToString();
         if(!CMessageSigner::VerifyMessage(infoMn.pubKeyMasternode, vchMasternodeSignature, strMessage, strError)) {
             LogPrintf("CTxLockVote::CheckSignature -- VerifyMessage() failed, error: %s\n", strError);
             return false;
@@ -1109,7 +1109,7 @@ bool CTxLockVote::Sign()
             return false;
         }
     } else {
-        std::string strMessage = txHash.ToString() + outpoint.ToStringShort();
+        std::string strMessage = txHash.ToString() + outpoint.ToString();
 
         if(!CMessageSigner::SignMessage(strMessage, vchMasternodeSignature, activeMasternode.keyMasternode)) {
             LogPrintf("CTxLockVote::Sign -- SignMessage() failed\n");
@@ -1128,7 +1128,7 @@ bool CTxLockVote::Sign()
 void CTxLockVote::Relay(CConnman& connman) const
 {
     CInv inv(MSG_TXLOCK_VOTE, GetHash());
-    connman.RelayInv(inv);
+    RelayInv(inv, connman);
 }
 
 bool CTxLockVote::IsExpired(int nHeight) const
@@ -1250,7 +1250,7 @@ bool CTxLockCandidate::IsTimedOut() const
 
 void CTxLockCandidate::Relay(CConnman& connman) const
 {
-    connman.RelayTransaction(*txLockRequest.tx);
+    RelayTransaction(*txLockRequest.tx, connman);
     std::map<COutPoint, COutPointLock>::const_iterator itOutpointLock = mapOutPointLocks.begin();
     while(itOutpointLock != mapOutPointLocks.end()) {
         itOutpointLock->second.Relay(connman);

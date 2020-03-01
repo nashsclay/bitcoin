@@ -417,12 +417,12 @@ void CSuperblockManager::CreateSuperblock(CMutableTransaction& txNewRet, int nBl
 
             CTxDestination address1;
             ExtractDestination(payment.script, address1);
-            CBitcoinAddress address2(address1);
+            //CBitcoinAddress address2(address1);
 
             // TODO: PRINT NICE N.N DASH OUTPUT
 
             DBG( std::cout << "CSuperblockManager::CreateSuperblock Before LogPrintf call, nAmount = " << payment.nAmount << std::endl; );
-            LogPrintf("NEW Superblock : output %d (addr %s, amount %d)\n", i, address2.ToString(), payment.nAmount);
+            LogPrintf("NEW Superblock : output %d (addr %s, amount %d)\n", i, EncodeDestination(address1), payment.nAmount);
             DBG( std::cout << "CSuperblockManager::CreateSuperblock After LogPrintf call " << std::endl; );
         } else {
             DBG( std::cout << "CSuperblockManager::CreateSuperblock Payment not found " << std::endl; );
@@ -548,9 +548,9 @@ CAmount CSuperblock::GetPaymentsLimit(int nBlockHeight)
     }
 
     // min subsidy for high diff networks and vice versa
-    int nBits = consensusParams.fPowAllowMinDifficultyBlocks ? UintToArith256(consensusParams.powLimit).GetCompact() : 1;
+    //int nBits = consensusParams.fPowAllowMinDifficultyBlocks ? UintToArith256(consensusParams.powLimit).GetCompact() : 1;
     // some part of all blocks issued during the cycle goes to superblock, see GetBlockSubsidy
-    CAmount nSuperblockPartOfSubsidy = GetBlockSubsidy(nBits, nBlockHeight - 1, consensusParams, true);
+    CAmount nSuperblockPartOfSubsidy = GetBlockSubsidy(nBlockHeight, false, 0, consensusParams, true);
     CAmount nPaymentsLimit = nSuperblockPartOfSubsidy * consensusParams.nSuperblockCycle;
     LogPrint(BCLog::GOBJECT, "CSuperblock::GetPaymentsLimit -- Valid superblock height %d, payments max %lld\n", nBlockHeight, nPaymentsLimit);
 
@@ -591,8 +591,8 @@ void CSuperblock::ParsePaymentSchedule(const std::string& strPaymentAddresses, c
     DBG( std::cout << "CSuperblock::ParsePaymentSchedule vecParsed1.size() = " << vecParsed1.size() << std::endl; );
 
     for (int i = 0; i < (int)vecParsed1.size(); i++) {
-        CBitcoinAddress address(vecParsed1[i]);
-        if (!address.IsValid()) {
+        CTxDestination dest = DecodeDestination(vecParsed1[i]);
+        if (!IsValidDestination(dest)) {
             std::ostringstream ostr;
             ostr << "CSuperblock::ParsePaymentSchedule -- Invalid Dash Address : " <<  vecParsed1[i];
             LogPrintf("%s\n", ostr.str());
@@ -604,12 +604,12 @@ void CSuperblock::ParsePaymentSchedule(const std::string& strPaymentAddresses, c
             - There might be an issue with multisig in the coinbase on mainnet, we will add support for it in a future release.
             - Post 12.3+ (test multisig coinbase transaction)
         */
-        if(address.IsScript()) {
+        /*if(address.IsScript()) {
             std::ostringstream ostr;
             ostr << "CSuperblock::ParsePaymentSchedule -- Script addresses are not supported yet : " <<  vecParsed1[i];
             LogPrintf("%s\n", ostr.str());
             throw std::runtime_error(ostr.str());
-        }
+        }*/
 
         DBG( std::cout << "CSuperblock::ParsePaymentSchedule i = " << i
              <<  ", vecParsed2[i] = " << vecParsed2[i]
@@ -622,18 +622,18 @@ void CSuperblock::ParsePaymentSchedule(const std::string& strPaymentAddresses, c
              << ", nAmount = " << nAmount
              << std::endl; );
 
-        CGovernancePayment payment(address, nAmount);
-        if(payment.IsValid()) {
+        CGovernancePayment payment(dest, nAmount);
+        //if(payment.IsValid()) {
             vecPayments.push_back(payment);
-        }
-        else {
+        //}
+        /*else {
             vecPayments.clear();
             std::ostringstream ostr;
-            ostr << "CSuperblock::ParsePaymentSchedule -- Invalid payment found: address = " << address.ToString()
+            ostr << "CSuperblock::ParsePaymentSchedule -- Invalid payment found: address = " << EncodeDestination(dest)
                  << ", amount = " << nAmount;
             LogPrintf("%s\n", ostr.str());
             throw std::runtime_error(ostr.str());
-        }
+        }*/
     }
 }
 
@@ -741,8 +741,8 @@ bool CSuperblock::IsValid(const CTransaction& txNew, int nBlockHeight, CAmount b
 
             CTxDestination address1;
             ExtractDestination(payment.script, address1);
-            CBitcoinAddress address2(address1);
-            LogPrintf("CSuperblock::IsValid -- ERROR: Block invalid: %d payment %d to %s not found\n", i, payment.nAmount, address2.ToString());
+            //CBitcoinAddress address2(address1);
+            LogPrintf("CSuperblock::IsValid -- ERROR: Block invalid: %d payment %d to %s not found\n", i, payment.nAmount, EncodeDestination(address1));
 
             return false;
         }
@@ -815,15 +815,15 @@ std::string CSuperblockManager::GetRequiredPaymentsString(int nBlockHeight)
 
             CTxDestination address1;
             ExtractDestination(payment.script, address1);
-            CBitcoinAddress address2(address1);
+            //CBitcoinAddress address2(address1);
 
             // RETURN NICE OUTPUT FOR CONSOLE
 
             if(ret != "Unknown") {
-                ret += ", " + address2.ToString();
+                ret += ", " + EncodeDestination(address1);
             }
             else {
-                ret = address2.ToString();
+                ret = EncodeDestination(address1);
             }
         }
     }

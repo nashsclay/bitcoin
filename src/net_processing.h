@@ -80,6 +80,10 @@ private:
     const bool m_enable_bip61;
 };
 
+void EraseInv(const CInv& inv, const CNode* pnode) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+void AskForInv(const CInv& inv, const CNode* pnode) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool PotentialAskForOverflow(const size_t& elements, const CNode* pnode);
+
 struct CNodeStateStats {
     int nMisbehavior = 0;
     int nSyncHeight = -1;

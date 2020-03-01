@@ -67,6 +67,9 @@ public:
         consensus.nBudgetPaymentsStartBlock = 328008; // actual historical value
         consensus.nSuperblockStartBlock = 614820; // The block at which 12.1 goes live (end of final 12.0 budget cycle)
         consensus.nSuperblockStartHash = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
+        consensus.nSuperblockCycle = 16616; // ~(60*24*30)/2.6, actual number of blocks per month is 200700 / 12 = 16725
+        consensus.nGovernanceMinQuorum = 10;
+        consensus.nGovernanceFilterElements = 20000;
         consensus.nLastPoWBlock = 2100000000;
         consensus.nMandatoryUpgradeBlock = 1;
         consensus.nUpgradeBlockVersion = 8; //Block headers must be at least this version after upgrade block
@@ -182,6 +185,9 @@ public:
         consensus.nBudgetPaymentsStartBlock = 328008; // actual historical value
         consensus.nSuperblockStartBlock = 614820; // The block at which 12.1 goes live (end of final 12.0 budget cycle)
         consensus.nSuperblockStartHash = uint256();
+        consensus.nSuperblockCycle = 24; // Superblocks can be issued hourly on testnet
+        consensus.nGovernanceMinQuorum = 1;
+        consensus.nGovernanceFilterElements = 500;
         consensus.nLastPoWBlock = 2100000000;
         consensus.nMandatoryUpgradeBlock = 1;
         consensus.nUpgradeBlockVersion = 8; //Block headers must be at least this version after upgrade block
@@ -274,6 +280,9 @@ public:
         consensus.nBudgetPaymentsStartBlock = 328008; // actual historical value
         consensus.nSuperblockStartBlock = 614820; // The block at which 12.1 goes live (end of final 12.0 budget cycle)
         consensus.nSuperblockStartHash = uint256();
+        consensus.nSuperblockCycle = 10;
+        consensus.nGovernanceMinQuorum = 1;
+        consensus.nGovernanceFilterElements = 100;
         consensus.nLastPoWBlock = 2100000000;
         consensus.nMandatoryUpgradeBlock = 1;
         consensus.nUpgradeBlockVersion = 8; //Block headers must be at least this version after upgrade block

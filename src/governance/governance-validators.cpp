@@ -5,6 +5,7 @@
 #include "governance-validators.h"
 
 #include "base58.h"
+#include "key_io.h"
 #include "timedata.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
@@ -151,16 +152,16 @@ bool CProposalValidator::ValidatePaymentAddress()
         return false;
     }
 
-    CBitcoinAddress address(strPaymentAddress);
-    if(!address.IsValid()) {
+    CTxDestination dest = DecodeDestination(strPaymentAddress);
+    if(!IsValidDestination(dest)) {
         strErrorMessages += "payment_address is invalid;";
         return false;
     }
 
-    if(address.IsScript()) {
+    /*if(address.IsScript()) {
         strErrorMessages += "script addresses are not supported;";
         return false;
-    }
+    }*/
 
     return true;
 }

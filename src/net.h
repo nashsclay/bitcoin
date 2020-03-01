@@ -712,6 +712,8 @@ public:
     // next time DisconnectNodes() runs
     std::atomic_bool fDisconnect{false};
     bool fSentAddr{false};
+    // If 'true' this node will be disconnected on CMasternodeMan::ProcessMasternodeConnections()
+    bool fMasternode;
     CSemaphoreGrant grantOutbound;
     std::atomic<int> nRefCount{0};
 
