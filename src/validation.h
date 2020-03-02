@@ -280,6 +280,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
                         bool* pfMissingInputs, std::list<CTransactionRef>* plTxnReplaced,
                         bool bypass_limits, const CAmount nAbsurdFee, bool test_accept=false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+bool GetUTXOCoin(const COutPoint& outpoint, Coin& coin);
+int GetUTXOHeight(const COutPoint& outpoint);
+int GetUTXOConfirmations(const COutPoint& outpoint);
+
 /** Get the BIP9 state for a given deployment at the current tip. */
 ThresholdState VersionBitsTipState(const Consensus::Params& params, Consensus::DeploymentPos pos);
 

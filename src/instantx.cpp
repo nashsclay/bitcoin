@@ -71,7 +71,10 @@ void CInstantSend::ProcessMessage(CNode* pfrom, const std::string& strCommand, C
 
         uint256 nVoteHash = vote.GetHash();
 
-        pfrom->setAskFor.erase(nVoteHash);
+        LOCK(cs_main);
+
+        CInv inv(MSG_TXLOCK_VOTE, nVoteHash);
+        EraseInv(inv, pfrom);
 
         // Ignore any InstantSend messages until masternode list is synced
         if(!masternodeSync.IsMasternodeListSynced()) return;
@@ -326,7 +329,7 @@ bool CInstantSend::ProcessNewTxLockVote(CNode* pfrom, const CTxLockVote& vote, C
     // relay valid vote asap
     vote.Relay(connman);
 
-    LOCK(cs_main);
+    AssertLockHeld(cs_main);
 #ifdef ENABLE_WALLET
     LOCK(pwalletMain ? &pwalletMain->cs_wallet : NULL);
 #endif
@@ -520,19 +523,19 @@ void CInstantSend::UpdateLockedTransaction(const CTxLockCandidate& txLockCandida
     if(!IsLockedInstantSendTransaction(txHash)) return; // not a locked tx, do not update/notify
 
 #ifdef ENABLE_WALLET
-    if(pwalletMain && pwalletMain->UpdatedTransaction(txHash)) {
+    /*if(pwalletMain && pwalletMain->UpdatedTransaction(txHash)) { TODO
         // bumping this to update UI
         nCompleteTXLocks++;
         // notify an external script once threshold is reached
-        std::string strCmd = GetArg("-instantsendnotify", "");
+        std::string strCmd = gArgs.GetArg("-instantsendnotify", "");
         if(!strCmd.empty()) {
             boost::replace_all(strCmd, "%s", txHash.GetHex());
             boost::thread t(runCommand, strCmd); // thread runs free
         }
-    }
+    }*/
 #endif
 
-    GetMainSignals().NotifyTransactionLock(*txLockCandidate.txLockRequest.tx);
+    //GetMainSignals().NotifyTransactionLock(*txLockCandidate.txLockRequest.tx);
 
     LogPrint(BCLog::INSTANTSEND, "CInstantSend::UpdateLockedTransaction -- done, txid=%s\n", txHash.ToString());
 }
@@ -623,7 +626,7 @@ bool CInstantSend::ResolveConflicts(const CTxLockCandidate& txLockCandidate)
     // No conflicts were found so far, check to see if it was already included in block
     CTransactionRef txTmp;
     uint256 hashBlock;
-    if(GetTransaction(txHash, txTmp, Params().GetConsensus(), hashBlock, true) && hashBlock != uint256()) {
+    if(GetTransaction(txHash, txTmp, Params().GetConsensus(), hashBlock/*, true*/) && hashBlock != uint256()) {
         LogPrint(BCLog::INSTANTSEND, "CInstantSend::ResolveConflicts -- Done, %s is included in block %s\n", txHash.ToString(), hashBlock.ToString());
         return true;
     }
@@ -885,7 +888,7 @@ void CInstantSend::SyncTransaction(const CTransaction& tx, const CBlockIndex *pi
     uint256 txHash = tx.GetHash();
 
     // When tx is 0-confirmed or conflicted, posInBlock is SYNC_TRANSACTION_NOT_IN_BLOCK and nHeightNew should be set to -1
-    int nHeightNew = posInBlock == CMainSignals::SYNC_TRANSACTION_NOT_IN_BLOCK ? -1 : pindex->nHeight;
+    int nHeightNew = pindex ? pindex->nHeight : -1;
 
     LogPrint(BCLog::INSTANTSEND, "CInstantSend::SyncTransaction -- txid=%s nHeightNew=%d\n", txHash.ToString(), nHeightNew);
 
@@ -1250,7 +1253,7 @@ bool CTxLockCandidate::IsTimedOut() const
 
 void CTxLockCandidate::Relay(CConnman& connman) const
 {
-    RelayTransaction(*txLockRequest.tx, connman);
+    RelayTransaction(txLockRequest.tx->GetHash(), connman);
     std::map<COutPoint, COutPointLock>::const_iterator itOutpointLock = mapOutPointLocks.begin();
     while(itOutpointLock != mapOutPointLocks.end()) {
         itOutpointLock->second.Relay(connman);

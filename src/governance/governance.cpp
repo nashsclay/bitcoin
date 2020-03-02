@@ -1314,6 +1314,8 @@ void CGovernanceManager::UpdatedBlockTip(const CBlockIndex *pindex, CConnman& co
 
 void CGovernanceManager::RequestOrphanObjects(CConnman& connman)
 {
+    std::vector<CNode*> vNodesCopy = connman.CopyNodeVector(CConnman::FullyConnectedOnly);
+
     std::vector<uint256> vecHashesFiltered;
     {
         std::vector<uint256> vecHashes;
@@ -1330,12 +1332,14 @@ void CGovernanceManager::RequestOrphanObjects(CConnman& connman)
     LogPrint(BCLog::GOBJECT, "CGovernanceObject::RequestOrphanObjects -- number objects = %d\n", vecHashesFiltered.size());
     for(size_t i = 0; i < vecHashesFiltered.size(); ++i) {
         const uint256& nHash = vecHashesFiltered[i];
-        connman.ForEachNode([&](CNode* pnode)
-        {
+        for(size_t j = 0; j < vNodesCopy.size(); ++j) {
+            CNode* pnode = vNodesCopy[j];
             if (!pnode->fMasternode)
                 RequestGovernanceObject(pnode, nHash, connman);
-        });
+        }
     }
+
+    connman.ReleaseNodeVector(vNodesCopy);
 }
 
 void CGovernanceManager::CleanOrphanObjects()

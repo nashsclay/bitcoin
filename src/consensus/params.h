@@ -47,6 +47,8 @@ struct BIP9Deployment {
 struct Params {
     uint256 hashGenesisBlock;
     int nSubsidyHalvingInterval;
+    int nInstantSendConfirmationsRequired; // in blocks
+    int nInstantSendKeepLock; // in blocks
     int nBudgetPaymentsStartBlock;
     int nSuperblockStartBlock;
     uint256 nSuperblockStartHash;

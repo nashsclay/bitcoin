@@ -64,6 +64,8 @@ public:
     CMainParams() {
         strNetworkID = "main";
         consensus.nSubsidyHalvingInterval = 210000;
+        consensus.nInstantSendConfirmationsRequired = 6;
+        consensus.nInstantSendKeepLock = 24;
         consensus.nBudgetPaymentsStartBlock = 328008; // actual historical value
         consensus.nSuperblockStartBlock = 614820; // The block at which 12.1 goes live (end of final 12.0 budget cycle)
         consensus.nSuperblockStartHash = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
@@ -182,6 +184,8 @@ public:
     CTestNetParams() {
         strNetworkID = "test";
         consensus.nSubsidyHalvingInterval = 210000;
+        consensus.nInstantSendConfirmationsRequired = 2;
+        consensus.nInstantSendKeepLock = 6;
         consensus.nBudgetPaymentsStartBlock = 328008; // actual historical value
         consensus.nSuperblockStartBlock = 614820; // The block at which 12.1 goes live (end of final 12.0 budget cycle)
         consensus.nSuperblockStartHash = uint256();
@@ -277,6 +281,8 @@ public:
     explicit CRegTestParams(const ArgsManager& args) {
         strNetworkID = "regtest";
         consensus.nSubsidyHalvingInterval = 150;
+        consensus.nInstantSendConfirmationsRequired = 2;
+        consensus.nInstantSendKeepLock = 6;
         consensus.nBudgetPaymentsStartBlock = 328008; // actual historical value
         consensus.nSuperblockStartBlock = 614820; // The block at which 12.1 goes live (end of final 12.0 budget cycle)
         consensus.nSuperblockStartHash = uint256();
