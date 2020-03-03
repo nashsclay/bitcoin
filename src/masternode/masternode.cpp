@@ -6,6 +6,7 @@
 #include "base58.h"
 #include "clientversion.h"
 #include "init.h"
+#include "key_io.h"
 #include "netbase.h"
 #include "masternode.h"
 #include "masternode-payments.h"
@@ -233,7 +234,7 @@ void CMasternode::Check(bool fForce)
 
     // We require MNs to be in PRE_ENABLED until they either start to expire or receive a ping and go into ENABLED state
     // Works on mainnet/testnet only and not the case on regtest/devnet.
-    if (Params().NetworkIDString() != CBaseChainParams::REGTEST && Params().NetworkIDString() != CBaseChainParams::DEVNET) {
+    if (Params().NetworkIDString() != CBaseChainParams::REGTEST) {
         if (lastPing.sigTime - sigTime < MASTERNODE_MIN_MNP_SECONDS) {
             nActiveState = MASTERNODE_PRE_ENABLED;
             if (nActiveStatePrev != nActiveState) {
@@ -332,7 +333,7 @@ void CMasternode::UpdateLastPaid(const CBlockIndex *pindex, int nMaxBlocksToScan
             if(!ReadBlockFromDisk(block, BlockReading, Params().GetConsensus()))
                 continue; // shouldn't really happen
 
-            CAmount nMasternodePayment = GetMasternodePayment(BlockReading->nHeight, block.vtx[0]->GetValueOut());
+            CAmount nMasternodePayment = GetMasternodePayment(BlockReading->nHeight, block.vtx[0]->GetValueOut(), block.IsProofOfStake());
 
             for (const auto& txout : block.vtx[0]->vout)
                 if(mnpayee == txout.scriptPubKey && nMasternodePayment == txout.nValue) {
@@ -397,7 +398,7 @@ bool CMasternodeBroadcast::Create(const COutPoint& outpoint, const CService& ser
     if (fImporting || fReindex) return false;
 
     LogPrint(BCLog::MASTERNODE, "CMasternodeBroadcast::Create -- pubKeyCollateralAddressNew = %s, pubKeyMasternodeNew.GetID() = %s\n",
-             CBitcoinAddress(pubKeyCollateralAddressNew.GetID()).ToString(),
+             EncodeDestination(pubKeyCollateralAddressNew.GetID()),
              pubKeyMasternodeNew.GetID().ToString());
 
     auto Log = [&strErrorRet,&mnbRet](std::string sErr)->bool
@@ -703,7 +704,7 @@ void CMasternodeBroadcast::Relay(CConnman& connman) const
     }
 
     CInv inv(MSG_MASTERNODE_ANNOUNCE, GetHash());
-    connman.RelayInv(inv);
+    RelayInv(inv, connman);
 }
 
 uint256 CMasternodePing::GetHash() const
@@ -927,7 +928,7 @@ void CMasternodePing::Relay(CConnman& connman)
     }
 
     CInv inv(MSG_MASTERNODE_PING, GetHash());
-    connman.RelayInv(inv);
+    RelayInv(inv, connman);
 }
 
 void CMasternode::AddGovernanceVote(uint256 nGovernanceObjectHash)

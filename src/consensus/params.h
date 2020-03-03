@@ -50,11 +50,14 @@ struct Params {
     int nInstantSendConfirmationsRequired; // in blocks
     int nInstantSendKeepLock; // in blocks
     int nBudgetPaymentsStartBlock;
+    int nBudgetPaymentsCycleBlocks;
+    int nBudgetPaymentsWindowBlocks;
     int nSuperblockStartBlock;
     uint256 nSuperblockStartHash;
     int nSuperblockCycle; // in blocks
     int nGovernanceMinQuorum; // Min absolute vote count to trigger an action
     int nGovernanceFilterElements;
+    int nMasternodeMinimumConfirmations;
     int nLastPoWBlock;
     int nMandatoryUpgradeBlock;
     int nUpgradeBlockVersion;
