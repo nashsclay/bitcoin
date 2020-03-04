@@ -14,6 +14,7 @@
 #include "masternodeman.h"
 #include "messagesigner.h"
 #include "script/standard.h"
+#include "shutdown.h"
 #include "util/system.h"
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
@@ -121,7 +122,7 @@ CMasternode::CollateralStatus CMasternode::CheckCollateral(const COutPoint& outp
         return COLLATERAL_INVALID_AMOUNT;
     }
 
-    if(pubkey == CPubKey() || coin.out.scriptPubKey != GetScriptForDestination(pubkey.GetID())) {
+    if(pubkey == CPubKey() || coin.out.scriptPubKey != GetScriptForDestination(PKHash(pubkey))) {
         return COLLATERAL_INVALID_PUBKEY;
     }
 
@@ -320,7 +321,7 @@ void CMasternode::UpdateLastPaid(const CBlockIndex *pindex, int nMaxBlocksToScan
 
     const CBlockIndex *BlockReading = pindex;
 
-    CScript mnpayee = GetScriptForDestination(pubKeyCollateralAddress.GetID());
+    CScript mnpayee = GetScriptForDestination(PKHash(pubKeyCollateralAddress));
     // LogPrint(BCLog::MNPAYMENTS, "CMasternode::UpdateLastPaidBlock -- searching for block with payment to %s\n", outpoint.ToString());
 
     LOCK(cs_mapMasternodeBlocks);
@@ -333,9 +334,12 @@ void CMasternode::UpdateLastPaid(const CBlockIndex *pindex, int nMaxBlocksToScan
             if(!ReadBlockFromDisk(block, BlockReading, Params().GetConsensus()))
                 continue; // shouldn't really happen
 
-            CAmount nMasternodePayment = GetMasternodePayment(BlockReading->nHeight, block.vtx[0]->GetValueOut(), block.IsProofOfStake());
+            bool fProofOfStake = block.IsProofOfStake();
+            const CTransaction& txNew = fProofOfStake ? *block.vtx[1] : *block.vtx[0];
 
-            for (const auto& txout : block.vtx[0]->vout)
+            CAmount nMasternodePayment = GetMasternodePayment(BlockReading->nHeight, txNew.GetValueOut(), fProofOfStake);
+
+            for (const auto& txout : txNew.vout)
                 if(mnpayee == txout.scriptPubKey && nMasternodePayment == txout.nValue) {
                     nBlockLastPaid = BlockReading->nHeight;
                     nTimeLastPaid = BlockReading->nTime;
@@ -376,7 +380,7 @@ bool CMasternodeBroadcast::Create(const std::string& strService, const std::stri
     if (!CMessageSigner::GetKeysFromSecret(strKeyMasternode, keyMasternodeNew, pubKeyMasternodeNew))
         return Log(strprintf("Invalid masternode key %s", strKeyMasternode));
 
-    if (!pwalletMain->GetMasternodeOutpointAndKeys(outpoint, pubKeyCollateralAddressNew, keyCollateralAddressNew, strTxHash, strOutputIndex))
+    if (!pwallet->GetMasternodeOutpointAndKeys(outpoint, pubKeyCollateralAddressNew, keyCollateralAddressNew, strTxHash, strOutputIndex))
         return Log(strprintf("Could not allocate outpoint %s:%s for masternode %s", strTxHash, strOutputIndex, strService));
 
     CService service;
@@ -398,7 +402,7 @@ bool CMasternodeBroadcast::Create(const COutPoint& outpoint, const CService& ser
     if (fImporting || fReindex) return false;
 
     LogPrint(BCLog::MASTERNODE, "CMasternodeBroadcast::Create -- pubKeyCollateralAddressNew = %s, pubKeyMasternodeNew.GetID() = %s\n",
-             EncodeDestination(pubKeyCollateralAddressNew.GetID()),
+             EncodeDestination(PKHash(pubKeyCollateralAddressNew)),
              pubKeyMasternodeNew.GetID().ToString());
 
     auto Log = [&strErrorRet,&mnbRet](std::string sErr)->bool
@@ -458,7 +462,7 @@ bool CMasternodeBroadcast::SimpleCheck(int& nDos)
     }
 
     CScript pubkeyScript;
-    pubkeyScript = GetScriptForDestination(pubKeyCollateralAddress.GetID());
+    pubkeyScript = GetScriptForDestination(PKHash(pubKeyCollateralAddress));
 
     if(pubkeyScript.size() != 25) {
         LogPrintf("CMasternodeBroadcast::SimpleCheck -- pubKeyCollateralAddress has the wrong size\n");
@@ -467,7 +471,7 @@ bool CMasternodeBroadcast::SimpleCheck(int& nDos)
     }
 
     CScript pubkeyScript2;
-    pubkeyScript2 = GetScriptForDestination(pubKeyMasternode.GetID());
+    pubkeyScript2 = GetScriptForDestination(PKHash(pubKeyMasternode));
 
     if(pubkeyScript2.size() != 25) {
         LogPrintf("CMasternodeBroadcast::SimpleCheck -- pubKeyMasternode has the wrong size\n");

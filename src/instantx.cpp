@@ -27,9 +27,9 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
 
-#ifdef ENABLE_WALLET
+/*#ifdef ENABLE_WALLET
 extern CWallet* pwalletMain;
-#endif // ENABLE_WALLET
+#endif // ENABLE_WALLET*/
 extern CTxMemPool mempool;
 
 bool fEnableInstantSend = true;

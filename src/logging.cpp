@@ -151,7 +151,7 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::QT, "qt"},
     {BCLog::LEVELDB, "leveldb"},
     //{BCLog::SPORK, "spork1"},
-    //{BCLog::MNSYNC, "mnsync1"},
+    {BCLog::MNSYNC, "mnsync1"},
     {BCLog::MASTERNODE, "masternode1"},
     {BCLog::GOBJECT, "gobject1"},
     {BCLog::MNPAYMENTS, "mnpayments1"},

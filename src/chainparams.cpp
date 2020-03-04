@@ -178,6 +178,7 @@ public:
         };
     }
 };
+static CMainParams mainParams;
 
 /**
  * Testnet (v3)
@@ -278,6 +279,7 @@ public:
         };
     }
 };
+static CTestNetParams testNetParams;
 
 /**
  * Regression test
@@ -382,6 +384,7 @@ public:
     }
     void UpdateActivationParametersFromArgs(const ArgsManager& args);
 };
+static CRegTestParams regTestParams;
 
 void CRegTestParams::UpdateActivationParametersFromArgs(const ArgsManager& args)
 {
@@ -431,6 +434,18 @@ static std::unique_ptr<const CChainParams> globalChainParams;
 const CChainParams &Params() {
     assert(globalChainParams);
     return *globalChainParams;
+}
+
+const CChainParams &Params(const std::string& chain)
+{
+    if (chain == CBaseChainParams::MAIN)
+        return mainParams;
+    else if (chain == CBaseChainParams::TESTNET)
+        return testNetParams;
+    else if (chain == CBaseChainParams::REGTEST)
+        return regTestParams;
+    else
+        throw std::runtime_error(strprintf("%s: Unknown chain %s.", __func__, chain));
 }
 
 std::unique_ptr<const CChainParams> CreateChainParams(const std::string& chain)

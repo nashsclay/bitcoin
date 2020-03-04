@@ -1,7 +1,7 @@
 
 #include "netbase.h"
 #include "masternodeconfig.h"
-#include "util.h"
+#include "util/system.h"
 #include "chainparams.h"
 
 #include <boost/filesystem.hpp>

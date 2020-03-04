@@ -1887,6 +1887,16 @@ int32_t ComputeBlockVersion(const CBlockIndex* pindexPrev, const Consensus::Para
     return nVersion;
 }
 
+bool GetBlockHash(uint256& hashRet, int nBlockHeight)
+{
+    LOCK(cs_main);
+    if(::ChainActive().Tip() == NULL) return false;
+    if(nBlockHeight < -1 || nBlockHeight > ::ChainActive().Height()) return false;
+    if(nBlockHeight == -1) nBlockHeight = ::ChainActive().Height();
+    hashRet = ::ChainActive()[nBlockHeight]->GetBlockHash();
+    return true;
+}
+
 /**
  * Threshold condition checker that triggers when unknown versionbits are seen on the network.
  */
@@ -2090,7 +2100,8 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
         return true;
     }
 
-    if (block.IsProofOfWork() && (pindex->nHeight > chainparams.GetConsensus().nLastPoWBlock)) {
+    bool fProofOfStake = block.IsProofOfStake();
+    if (!fProofOfStake && (pindex->nHeight > chainparams.GetConsensus().nLastPoWBlock)) {
         return state.Invalid(ValidationInvalidReason::CONSENSUS, error("%s: PoW period ended", __func__), REJECT_INVALID, "PoW-ended");
     }
 
@@ -2350,14 +2361,14 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     // the peer who sent us this block is missing some data and wasn't able
     // to recognize that block is actually invalid.
     // TODO: resync data (both ways?) and try to reprocess this block later.
-    CAmount blockReward = /*nFees +*/ GetBlockSubsidy(pindex->nHeight, block.IsProofOfStake(), 0, chainparams.GetConsensus());
+    CAmount blockReward = /*nFees +*/ GetBlockSubsidy(pindex->nHeight, fProofOfStake, 0, chainparams.GetConsensus());
     std::string strError = "";
     if (!IsBlockValueValid(block, pindex->nHeight, blockReward, strError)) {
         return state.Invalid(ValidationInvalidReason::RECENT_CONSENSUS_CHANGE, error("ConnectBlock(DASH): %s", strError), REJECT_INVALID, "bad-cb-amount");
         //return state.DoS(0, error("ConnectBlock(DASH): %s", strError), REJECT_INVALID, "bad-cb-amount");
     }
 
-    if (!IsBlockPayeeValid(block.IsProofOfStake() ? *block.vtx[1] : *block.vtx[0], pindex->nHeight, blockReward)) {
+    if (!IsBlockPayeeValid(fProofOfStake ? *block.vtx[1] : *block.vtx[0], pindex->nHeight, blockReward)) {
         //mapRejectedBlocks.insert(std::make_pair(block.GetHash(), GetTime()));
         return state.Invalid(ValidationInvalidReason::RECENT_CONSENSUS_CHANGE, error("ConnectBlock(DASH): couldn't find masternode or superblock payments"),
                                 REJECT_INVALID, "bad-cb-payee");
