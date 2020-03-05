@@ -54,7 +54,7 @@ namespace BCLog {
         COINDB      = (1 << 18),
         QT          = (1 << 19),
         LEVELDB     = (1 << 20),
-        //SPORK       = (1 << 21),
+        SPORK       = (1 << 21),
         MNSYNC      = (1 << 22),
         MASTERNODE  = (1 << 23),
         GOBJECT     = (1 << 24),

@@ -3,21 +3,23 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include "privatesend.h"
 
-#include "activemasternode.h"
+#include "masternode/activemasternode.h"
 #include "consensus/validation.h"
-#include "governance.h"
+#include "governance/governance.h"
 #include "init.h"
 #include "instantx.h"
-#include "masternode-payments.h"
-#include "masternode-sync.h"
-#include "masternodeman.h"
+#include "masternode/masternode-payments.h"
+#include "masternode/masternode-sync.h"
+#include "masternode/masternodeman.h"
 #include "messagesigner.h"
 #include "netfulfilledman.h"
 #include "netmessagemaker.h"
 #include "script/sign.h"
+#include "shutdown.h"
 #include "txmempool.h"
-#include "util.h"
-#include "utilmoneystr.h"
+#include "util/moneystr.h"
+#include "util/system.h"
+#include "util/translation.h"
 
 #include <boost/lexical_cast.hpp>
 
@@ -209,7 +211,7 @@ void CPrivateSendBase::CheckQueue()
     std::vector<CDarksendQueue>::iterator it = vecDarksendQueue.begin();
     while(it != vecDarksendQueue.end()) {
         if((*it).IsExpired()) {
-            LogPrint("privatesend", "CPrivateSendBase::%s -- Removing expired queue (%s)\n", __func__, (*it).ToString());
+            LogPrint(BCLog::PRIVATESEND, "CPrivateSendBase::%s -- Removing expired queue (%s)\n", __func__, (*it).ToString());
             it = vecDarksendQueue.erase(it);
         } else ++it;
     }
@@ -279,7 +281,7 @@ bool CPrivateSend::IsCollateralValid(const CTransaction& txCollateral)
     for (const auto& txin : txCollateral.vin) {
         Coin coin;
         if(!GetUTXOCoin(txin.prevout, coin)) {
-            LogPrint("privatesend", "CPrivateSend::IsCollateralValid -- Unknown inputs in collateral transaction, txCollateral=%s", txCollateral.ToString());
+            LogPrint(BCLog::PRIVATESEND, "CPrivateSend::IsCollateralValid -- Unknown inputs in collateral transaction, txCollateral=%s", txCollateral.ToString());
             return false;
         }
         nValueIn += coin.out.nValue;
@@ -287,17 +289,17 @@ bool CPrivateSend::IsCollateralValid(const CTransaction& txCollateral)
 
     //collateral transactions are required to pay out a small fee to the miners
     if(nValueIn - nValueOut < GetCollateralAmount()) {
-        LogPrint("privatesend", "CPrivateSend::IsCollateralValid -- did not include enough fees in transaction: fees: %d, txCollateral=%s", nValueOut - nValueIn, txCollateral.ToString());
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSend::IsCollateralValid -- did not include enough fees in transaction: fees: %d, txCollateral=%s", nValueOut - nValueIn, txCollateral.ToString());
         return false;
     }
 
-    LogPrint("privatesend", "CPrivateSend::IsCollateralValid -- %s", txCollateral.ToString());
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSend::IsCollateralValid -- %s", txCollateral.ToString());
 
     {
         LOCK(cs_main);
         CValidationState validationState;
         if(!AcceptToMemoryPool(mempool, validationState, MakeTransactionRef(txCollateral), false, NULL, NULL, false, maxTxFee, true)) {
-            LogPrint("privatesend", "CPrivateSend::IsCollateralValid -- didn't pass AcceptToMemoryPool()\n");
+            LogPrint(BCLog::PRIVATESEND, "CPrivateSend::IsCollateralValid -- didn't pass AcceptToMemoryPool()\n");
             return false;
         }
     }
@@ -487,7 +489,7 @@ void CPrivateSend::CheckDSTXes(int nHeight)
             ++it;
         }
     }
-    LogPrint("privatesend", "CPrivateSend::CheckDSTXes -- mapDSTX.size()=%llu\n", mapDSTX.size());
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSend::CheckDSTXes -- mapDSTX.size()=%llu\n", mapDSTX.size());
 }
 
 void CPrivateSend::UpdatedBlockTip(const CBlockIndex *pindex)
@@ -508,7 +510,7 @@ void CPrivateSend::SyncTransaction(const CTransaction& tx, const CBlockIndex *pi
 
     // When tx is 0-confirmed or conflicted, posInBlock is SYNC_TRANSACTION_NOT_IN_BLOCK and nConfirmedHeight should be set to -1
     mapDSTX[txHash].SetConfirmedHeight(posInBlock == CMainSignals::SYNC_TRANSACTION_NOT_IN_BLOCK ? -1 : pindex->nHeight);
-    LogPrint("privatesend", "CPrivateSendClient::SyncTransaction -- txid=%s\n", txHash.ToString());
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSendClient::SyncTransaction -- txid=%s\n", txHash.ToString());
 }
 
 //TODO: Rename/move to core

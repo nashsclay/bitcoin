@@ -85,6 +85,7 @@ public:
     const CCheckpointData& Checkpoints() const { return checkpointData; }
     const ChainTxData& TxData() const { return chainTxData; }
     int PoolMaxTransactions() const { return nPoolMaxTransactions; }
+    int FulfilledRequestExpireTime() const { return nFulfilledRequestExpireTime; }
 protected:
     CChainParams() {}
 
@@ -106,6 +107,7 @@ protected:
     CCheckpointData checkpointData;
     ChainTxData chainTxData;
     int nPoolMaxTransactions;
+    int nFulfilledRequestExpireTime;
 };
 
 /**

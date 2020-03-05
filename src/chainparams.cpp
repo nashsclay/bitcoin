@@ -151,6 +151,7 @@ public:
         m_is_test_chain = false;
 
         nPoolMaxTransactions = 3;
+        nFulfilledRequestExpireTime = 60*60; // fulfilled requests expire in 1 hour
 
         checkpointData = {
             {
@@ -264,6 +265,7 @@ public:
         m_is_test_chain = true;
 
         nPoolMaxTransactions = 3;
+        nFulfilledRequestExpireTime = 5*60; // fulfilled requests expire in 5 minutes
 
         checkpointData = {
             {
@@ -352,6 +354,7 @@ public:
         m_is_test_chain = true;
 
         nPoolMaxTransactions = 3;
+        nFulfilledRequestExpireTime = 5*60; // fulfilled requests expire in 5 minutes
 
         checkpointData = {
             {

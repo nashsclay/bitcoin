@@ -14,6 +14,7 @@
 #include <boost/lexical_cast.hpp>
 
 CSporkManager sporkManager;
+extern void Misbehaving(NodeId nodeid, int howmuch, const std::string& message="");
 
 std::map<uint256, CSporkMessage> mapSporks;
 std::map<int, int64_t> mapSporkDefaults = {
@@ -24,7 +25,7 @@ std::map<int, int64_t> mapSporkDefaults = {
     {SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT, 4070908800ULL}, // OFF
     {SPORK_9_SUPERBLOCKS_ENABLED,            4070908800ULL}, // OFF
     {SPORK_10_MASTERNODE_PAY_UPDATED_NODES,  4070908800ULL}, // OFF
-    {SPORK_12_RECONSIDER_BLOCKS,             0},             // 0 BLOCKS
+    //{SPORK_12_RECONSIDER_BLOCKS,             0},             // 0 BLOCKS
     {SPORK_14_REQUIRE_SENTINEL_FLAG,         4070908800ULL}, // OFF
 };
 
@@ -42,14 +43,15 @@ void CSporkManager::ProcessSpork(CNode* pfrom, const std::string& strCommand, CD
         std::string strLogMsg;
         {
             LOCK(cs_main);
-            pfrom->setAskFor.erase(hash);
-            if(!chainActive.Tip()) return;
-            strLogMsg = strprintf("SPORK -- hash: %s id: %d value: %10d bestHeight: %d peer=%d", hash.ToString(), spork.nSporkID, spork.nValue, chainActive.Height(), pfrom->id);
+            CInv inv(MSG_SPORK, hash);
+            EraseInv(inv, pfrom);
+            if(!::ChainActive().Tip()) return;
+            strLogMsg = strprintf("SPORK -- hash: %s id: %d value: %10d bestHeight: %d peer=%d", hash.ToString(), spork.nSporkID, spork.nValue, ::ChainActive().Height(), pfrom->GetId());
         }
 
         if(mapSporksActive.count(spork.nSporkID)) {
             if (mapSporksActive[spork.nSporkID].nTimeSigned >= spork.nTimeSigned) {
-                LogPrint("spork", "%s seen\n", strLogMsg);
+                LogPrint(BCLog::SPORK, "%s seen\n", strLogMsg);
                 return;
             } else {
                 LogPrintf("%s updated\n", strLogMsg);
@@ -70,7 +72,7 @@ void CSporkManager::ProcessSpork(CNode* pfrom, const std::string& strCommand, CD
         spork.Relay(connman);
 
         //does a task if needed
-        ExecuteSpork(spork.nSporkID, spork.nValue);
+        //ExecuteSpork(spork.nSporkID, spork.nValue);
 
     } else if (strCommand == NetMsgType::GETSPORKS) {
 
@@ -84,7 +86,7 @@ void CSporkManager::ProcessSpork(CNode* pfrom, const std::string& strCommand, CD
 
 }
 
-void CSporkManager::ExecuteSpork(int nSporkID, int nValue)
+/*void CSporkManager::ExecuteSpork(int nSporkID, int nValue)
 {
     //correct fork via spork technology
     if(nSporkID == SPORK_12_RECONSIDER_BLOCKS && nValue > 0) {
@@ -96,7 +98,7 @@ void CSporkManager::ExecuteSpork(int nSporkID, int nValue)
         static int64_t nTimeExecuted = 0; // i.e. it was never executed before
 
         if(GetTime() - nTimeExecuted < nTimeout) {
-            LogPrint("spork", "CSporkManager::ExecuteSpork -- ERROR: Trying to reconsider blocks, too soon - %d/%d\n", GetTime() - nTimeExecuted, nTimeout);
+            LogPrint(BCLog::SPORK, "CSporkManager::ExecuteSpork -- ERROR: Trying to reconsider blocks, too soon - %d/%d\n", GetTime() - nTimeExecuted, nTimeout);
             return;
         }
 
@@ -111,7 +113,7 @@ void CSporkManager::ExecuteSpork(int nSporkID, int nValue)
         ReprocessBlocks(nValue);
         nTimeExecuted = GetTime();
     }
-}
+}*/
 
 bool CSporkManager::UpdateSpork(int nSporkID, int64_t nValue, CConnman& connman)
 {
@@ -138,7 +140,7 @@ bool CSporkManager::IsSporkActive(int nSporkID)
     } else if (mapSporkDefaults.count(nSporkID)) {
         r = mapSporkDefaults[nSporkID];
     } else {
-        LogPrint("spork", "CSporkManager::IsSporkActive -- Unknown Spork ID %d\n", nSporkID);
+        LogPrint(BCLog::SPORK, "CSporkManager::IsSporkActive -- Unknown Spork ID %d\n", nSporkID);
         r = 4070908800ULL; // 2099-1-1 i.e. off by default
     }
 
@@ -155,7 +157,7 @@ int64_t CSporkManager::GetSporkValue(int nSporkID)
         return mapSporkDefaults[nSporkID];
     }
 
-    LogPrint("spork", "CSporkManager::GetSporkValue -- Unknown Spork ID %d\n", nSporkID);
+    LogPrint(BCLog::SPORK, "CSporkManager::GetSporkValue -- Unknown Spork ID %d\n", nSporkID);
     return -1;
 }
 
@@ -168,10 +170,10 @@ int CSporkManager::GetSporkIDByName(const std::string& strName)
     if (strName == "SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT")    return SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT;
     if (strName == "SPORK_9_SUPERBLOCKS_ENABLED")               return SPORK_9_SUPERBLOCKS_ENABLED;
     if (strName == "SPORK_10_MASTERNODE_PAY_UPDATED_NODES")     return SPORK_10_MASTERNODE_PAY_UPDATED_NODES;
-    if (strName == "SPORK_12_RECONSIDER_BLOCKS")                return SPORK_12_RECONSIDER_BLOCKS;
+    //if (strName == "SPORK_12_RECONSIDER_BLOCKS")                return SPORK_12_RECONSIDER_BLOCKS;
     if (strName == "SPORK_14_REQUIRE_SENTINEL_FLAG")            return SPORK_14_REQUIRE_SENTINEL_FLAG;
 
-    LogPrint("spork", "CSporkManager::GetSporkIDByName -- Unknown Spork name '%s'\n", strName);
+    LogPrint(BCLog::SPORK, "CSporkManager::GetSporkIDByName -- Unknown Spork name '%s'\n", strName);
     return -1;
 }
 
@@ -185,10 +187,10 @@ std::string CSporkManager::GetSporkNameByID(int nSporkID)
         case SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT:    return "SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT";
         case SPORK_9_SUPERBLOCKS_ENABLED:               return "SPORK_9_SUPERBLOCKS_ENABLED";
         case SPORK_10_MASTERNODE_PAY_UPDATED_NODES:     return "SPORK_10_MASTERNODE_PAY_UPDATED_NODES";
-        case SPORK_12_RECONSIDER_BLOCKS:                return "SPORK_12_RECONSIDER_BLOCKS";
+        //case SPORK_12_RECONSIDER_BLOCKS:                return "SPORK_12_RECONSIDER_BLOCKS";
         case SPORK_14_REQUIRE_SENTINEL_FLAG:            return "SPORK_14_REQUIRE_SENTINEL_FLAG";
         default:
-            LogPrint("spork", "CSporkManager::GetSporkNameByID -- Unknown Spork ID %d\n", nSporkID);
+            LogPrint(BCLog::SPORK, "CSporkManager::GetSporkNameByID -- Unknown Spork ID %d\n", nSporkID);
             return "Unknown";
     }
 }
@@ -312,5 +314,5 @@ bool CSporkMessage::CheckSignature(const CKeyID& pubKeyId) const
 void CSporkMessage::Relay(CConnman& connman)
 {
     CInv inv(MSG_SPORK, GetHash());
-    connman.RelayInv(inv);
+    RelayInv(inv, connman);
 }

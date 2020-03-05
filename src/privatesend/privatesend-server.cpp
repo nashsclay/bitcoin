@@ -3,17 +3,18 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include "privatesend-server.h"
 
-#include "activemasternode.h"
+#include "masternode/activemasternode.h"
 #include "consensus/validation.h"
 #include "core_io.h"
 #include "init.h"
-#include "masternode-sync.h"
-#include "masternodeman.h"
+#include "masternode/masternode-sync.h"
+#include "masternode/masternodeman.h"
 #include "netmessagemaker.h"
 #include "script/interpreter.h"
+#include "shutdown.h"
 #include "txmempool.h"
-#include "util.h"
-#include "utilmoneystr.h"
+#include "util/moneystr.h"
+#include "util/system.h"
 
 CPrivateSendServer privateSendServer;
 
@@ -26,7 +27,7 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
     if(strCommand == NetMsgType::DSACCEPT) {
 
         if(pfrom->nVersion < MIN_PRIVATESEND_PEER_PROTO_VERSION) {
-            LogPrint("privatesend", "DSACCEPT -- peer=%d using obsolete version %i\n", pfrom->id, pfrom->nVersion);
+            LogPrint(BCLog::PRIVATESEND, "DSACCEPT -- peer=%d using obsolete version %i\n", pfrom->GetId(), pfrom->nVersion);
             connman.PushMessage(pfrom, CNetMsgMaker(pfrom->GetSendVersion()).Make(NetMsgType::REJECT, strCommand, REJECT_OBSOLETE,
                                strprintf("Version must be %d or greater", MIN_PRIVATESEND_PEER_PROTO_VERSION)));
             PushStatus(pfrom, STATUS_REJECTED, ERR_VERSION, connman);
@@ -43,7 +44,7 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
         CDarksendAccept dsa;
         vRecv >> dsa;
 
-        LogPrint("privatesend", "DSACCEPT -- nDenom %d (%s)  txCollateral %s", dsa.nDenom, CPrivateSend::GetDenominationsToString(dsa.nDenom), dsa.txCollateral.ToString());
+        LogPrint(BCLog::PRIVATESEND, "DSACCEPT -- nDenom %d (%s)  txCollateral %s", dsa.nDenom, CPrivateSend::GetDenominationsToString(dsa.nDenom), dsa.txCollateral.ToString());
 
         if(dsa.nInputCount < 0 || dsa.nInputCount > PRIVATESEND_ENTRY_MAX_SIZE) return;
 
@@ -80,7 +81,7 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
         if(!lockRecv) return;
 
         if(pfrom->nVersion < MIN_PRIVATESEND_PEER_PROTO_VERSION) {
-            LogPrint("privatesend", "DSQUEUE -- peer=%d using obsolete version %i\n", pfrom->id, pfrom->nVersion);
+            LogPrint(BCLog::PRIVATESEND, "DSQUEUE -- peer=%d using obsolete version %i\n", pfrom->GetId(), pfrom->nVersion);
             connman.PushMessage(pfrom, CNetMsgMaker(pfrom->GetSendVersion()).Make(NetMsgType::REJECT, strCommand, REJECT_OBSOLETE,
                                strprintf("Version must be %d or greater", MIN_PRIVATESEND_PEER_PROTO_VERSION)));
             return;
@@ -92,12 +93,12 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
         // process every dsq only once
         for (const auto& q : vecDarksendQueue) {
             if(q == dsq) {
-                // LogPrint("privatesend", "DSQUEUE -- %s seen\n", dsq.ToString());
+                // LogPrint(BCLog::PRIVATESEND, "DSQUEUE -- %s seen\n", dsq.ToString());
                 return;
             }
         }
 
-        LogPrint("privatesend", "DSQUEUE -- %s new\n", dsq.ToString());
+        LogPrint(BCLog::PRIVATESEND, "DSQUEUE -- %s new\n", dsq.ToString());
 
         if(dsq.IsExpired()) return;
         if(dsq.nInputCount < 0 || dsq.nInputCount > PRIVATESEND_ENTRY_MAX_SIZE) return;
@@ -115,21 +116,21 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
             for (const auto& q : vecDarksendQueue) {
                 if(q.masternodeOutpoint == dsq.masternodeOutpoint) {
                     // no way same mn can send another "not yet ready" dsq this soon
-                    LogPrint("privatesend", "DSQUEUE -- Masternode %s is sending WAY too many dsq messages\n", mnInfo.addr.ToString());
+                    LogPrint(BCLog::PRIVATESEND, "DSQUEUE -- Masternode %s is sending WAY too many dsq messages\n", mnInfo.addr.ToString());
                     return;
                 }
             }
 
             int nThreshold = mnInfo.nLastDsq + mnodeman.CountEnabled(MIN_PRIVATESEND_PEER_PROTO_VERSION)/5;
-            LogPrint("privatesend", "DSQUEUE -- nLastDsq: %d  threshold: %d  nDsqCount: %d\n", mnInfo.nLastDsq, nThreshold, mnodeman.nDsqCount);
+            LogPrint(BCLog::PRIVATESEND, "DSQUEUE -- nLastDsq: %d  threshold: %d  nDsqCount: %d\n", mnInfo.nLastDsq, nThreshold, mnodeman.nDsqCount);
             //don't allow a few nodes to dominate the queuing process
             if(mnInfo.nLastDsq != 0 && nThreshold > mnodeman.nDsqCount) {
-                LogPrint("privatesend", "DSQUEUE -- Masternode %s is sending too many dsq messages\n", mnInfo.addr.ToString());
+                LogPrint(BCLog::PRIVATESEND, "DSQUEUE -- Masternode %s is sending too many dsq messages\n", mnInfo.addr.ToString());
                 return;
             }
             mnodeman.AllowMixing(dsq.masternodeOutpoint);
 
-            LogPrint("privatesend", "DSQUEUE -- new PrivateSend queue (%s) from masternode %s\n", dsq.ToString(), mnInfo.addr.ToString());
+            LogPrint(BCLog::PRIVATESEND, "DSQUEUE -- new PrivateSend queue (%s) from masternode %s\n", dsq.ToString(), mnInfo.addr.ToString());
             vecDarksendQueue.push_back(dsq);
             dsq.Relay(connman);
         }
@@ -137,7 +138,7 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
     } else if(strCommand == NetMsgType::DSVIN) {
 
         if(pfrom->nVersion < MIN_PRIVATESEND_PEER_PROTO_VERSION) {
-            LogPrint("privatesend", "DSVIN -- peer=%d using obsolete version %i\n", pfrom->id, pfrom->nVersion);
+            LogPrint(BCLog::PRIVATESEND, "DSVIN -- peer=%d using obsolete version %i\n", pfrom->GetId(), pfrom->nVersion);
             connman.PushMessage(pfrom, CNetMsgMaker(pfrom->GetSendVersion()).Make(NetMsgType::REJECT, strCommand, REJECT_OBSOLETE,
                                strprintf("Version must be %d or greater", MIN_PRIVATESEND_PEER_PROTO_VERSION)));
             PushStatus(pfrom, STATUS_REJECTED, ERR_VERSION, connman);
@@ -154,7 +155,7 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
         CDarkSendEntry entry;
         vRecv >> entry;
 
-        LogPrint("privatesend", "DSVIN -- txCollateral %s", entry.txCollateral->ToString());
+        LogPrint(BCLog::PRIVATESEND, "DSVIN -- txCollateral %s", entry.txCollateral->ToString());
 
         if(entry.vecTxDSIn.size() > PRIVATESEND_ENTRY_MAX_SIZE) {
             LogPrintf("DSVIN -- ERROR: too many inputs! %d/%d\n", entry.vecTxDSIn.size(), PRIVATESEND_ENTRY_MAX_SIZE);
@@ -213,7 +214,7 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
             for (const auto& txin : entry.vecTxDSIn) {
                 tx.vin.push_back(txin);
 
-                LogPrint("privatesend", "DSVIN -- txin=%s\n", txin.ToString());
+                LogPrint(BCLog::PRIVATESEND, "DSVIN -- txin=%s\n", txin.ToString());
 
                 Coin coin;
                 if(GetUTXOCoin(txin.prevout, coin)) {
@@ -249,7 +250,7 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
     } else if(strCommand == NetMsgType::DSSIGNFINALTX) {
 
         if(pfrom->nVersion < MIN_PRIVATESEND_PEER_PROTO_VERSION) {
-            LogPrint("privatesend", "DSSIGNFINALTX -- peer=%d using obsolete version %i\n", pfrom->id, pfrom->nVersion);
+            LogPrint(BCLog::PRIVATESEND, "DSSIGNFINALTX -- peer=%d using obsolete version %i\n", pfrom->GetId(), pfrom->nVersion);
             connman.PushMessage(pfrom, CNetMsgMaker(pfrom->GetSendVersion()).Make(NetMsgType::REJECT, strCommand, REJECT_OBSOLETE,
                                strprintf("Version must be %d or greater", MIN_PRIVATESEND_PEER_PROTO_VERSION)));
             return;
@@ -258,7 +259,7 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
         std::vector<CTxIn> vecTxIn;
         vRecv >> vecTxIn;
 
-        LogPrint("privatesend", "DSSIGNFINALTX -- vecTxIn.size() %s\n", vecTxIn.size());
+        LogPrint(BCLog::PRIVATESEND, "DSSIGNFINALTX -- vecTxIn.size() %s\n", vecTxIn.size());
 
         int nTxInIndex = 0;
         int nTxInsCount = (int)vecTxIn.size();
@@ -266,11 +267,11 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
         for (const auto& txin : vecTxIn) {
             nTxInIndex++;
             if(!AddScriptSig(txin)) {
-                LogPrint("privatesend", "DSSIGNFINALTX -- AddScriptSig() failed at %d/%d, session: %d\n", nTxInIndex, nTxInsCount, nSessionID);
+                LogPrint(BCLog::PRIVATESEND, "DSSIGNFINALTX -- AddScriptSig() failed at %d/%d, session: %d\n", nTxInIndex, nTxInsCount, nSessionID);
                 RelayStatus(STATUS_REJECTED, connman);
                 return;
             }
-            LogPrint("privatesend", "DSSIGNFINALTX -- AddScriptSig() %d/%d success\n", nTxInIndex, nTxInsCount);
+            LogPrint(BCLog::PRIVATESEND, "DSSIGNFINALTX -- AddScriptSig() %d/%d success\n", nTxInIndex, nTxInsCount);
         }
         // all is good
         CheckPool(connman);
@@ -292,18 +293,18 @@ void CPrivateSendServer::CheckPool(CConnman& connman)
 {
     if (!fMasternodeMode) return;
 
-    LogPrint("privatesend", "CPrivateSendServer::CheckPool -- entries count %lu\n", GetEntriesCount());
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CheckPool -- entries count %lu\n", GetEntriesCount());
 
     // If entries are full, create finalized transaction
     if (nState == POOL_STATE_ACCEPTING_ENTRIES && GetEntriesCount() >= CPrivateSend::GetMaxPoolTransactions()) {
-        LogPrint("privatesend", "CPrivateSendServer::CheckPool -- FINALIZE TRANSACTIONS\n");
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CheckPool -- FINALIZE TRANSACTIONS\n");
         CreateFinalTransaction(connman);
         return;
     }
 
     // If we have all of the signatures, try to compile the transaction
     if (nState == POOL_STATE_SIGNING && IsSignaturesComplete()) {
-        LogPrint("privatesend", "CPrivateSendServer::CheckPool -- SIGNING\n");
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CheckPool -- SIGNING\n");
         CommitFinalTransaction(connman);
         return;
     }
@@ -311,7 +312,7 @@ void CPrivateSendServer::CheckPool(CConnman& connman)
 
 void CPrivateSendServer::CreateFinalTransaction(CConnman& connman)
 {
-    LogPrint("privatesend", "CPrivateSendServer::CreateFinalTransaction -- FINALIZE TRANSACTIONS\n");
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CreateFinalTransaction -- FINALIZE TRANSACTIONS\n");
 
     CMutableTransaction txNew;
 
@@ -328,7 +329,7 @@ void CPrivateSendServer::CreateFinalTransaction(CConnman& connman)
     sort(txNew.vout.begin(), txNew.vout.end(), CompareOutputBIP69());
 
     finalMutableTransaction = txNew;
-    LogPrint("privatesend", "CPrivateSendServer::CreateFinalTransaction -- finalMutableTransaction=%s", txNew.ToString());
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CreateFinalTransaction -- finalMutableTransaction=%s", txNew.ToString());
 
     // request signatures from clients
     RelayFinalTransaction(finalMutableTransaction, connman);
@@ -342,13 +343,13 @@ void CPrivateSendServer::CommitFinalTransaction(CConnman& connman)
     CTransactionRef finalTransaction = MakeTransactionRef(finalMutableTransaction);
     uint256 hashTx = finalTransaction->GetHash();
 
-    LogPrint("privatesend", "CPrivateSendServer::CommitFinalTransaction -- finalTransaction=%s", finalTransaction->ToString());
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CommitFinalTransaction -- finalTransaction=%s", finalTransaction->ToString());
 
     {
         // See if the transaction is valid
         TRY_LOCK(cs_main, lockMain);
         CValidationState validationState;
-        mempool.PrioritiseTransaction(hashTx, hashTx.ToString(), 1000, 0.1*COIN);
+        mempool.PrioritiseTransaction(hashTx, 0.1*COIN);
         if(!lockMain || !AcceptToMemoryPool(mempool, validationState, finalTransaction, false, NULL, NULL, false, maxTxFee, true))
         {
             LogPrintf("CPrivateSendServer::CommitFinalTransaction -- AcceptToMemoryPool() error: Transaction not valid\n");
@@ -371,7 +372,7 @@ void CPrivateSendServer::CommitFinalTransaction(CConnman& connman)
     LogPrintf("CPrivateSendServer::CommitFinalTransaction -- TRANSMITTING DSTX\n");
 
     CInv inv(MSG_DSTX, hashTx);
-    connman.RelayInv(inv);
+    RelayInv(inv, connman);
 
     // Tell the clients it was successful
     RelayCompletedTransaction(MSG_SUCCESS, connman);
@@ -380,7 +381,7 @@ void CPrivateSendServer::CommitFinalTransaction(CConnman& connman)
     ChargeRandomFees(connman);
 
     // Reset
-    LogPrint("privatesend", "CPrivateSendServer::CommitFinalTransaction -- COMPLETED -- RESETTING\n");
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CommitFinalTransaction -- COMPLETED -- RESETTING\n");
     SetNull();
 }
 
@@ -455,7 +456,7 @@ void CPrivateSendServer::ChargeFees(CConnman& connman)
             // should never really happen
             LogPrintf("CPrivateSendServer::ChargeFees -- ERROR: AcceptToMemoryPool failed!\n");
         } else {
-            connman.RelayTransaction(*vecOffendersCollaterals[0]);
+            RelayTransaction(*vecOffendersCollaterals[0], connman);
         }
     }
 }
@@ -487,7 +488,7 @@ void CPrivateSendServer::ChargeRandomFees(CConnman& connman)
             // should never really happen
             LogPrintf("CPrivateSendServer::ChargeRandomFees -- ERROR: AcceptToMemoryPool failed!\n");
         } else {
-            connman.RelayTransaction(*txCollateral);
+            RelayTransaction(*txCollateral, connman);
         }
     }
 }
@@ -505,7 +506,7 @@ void CPrivateSendServer::CheckTimeout(CConnman& connman)
     bool fTimeout = GetTime() - nTimeLastSuccessfulStep >= nTimeout;
 
     if(nState != POOL_STATE_IDLE && fTimeout) {
-        LogPrint("privatesend", "CPrivateSendServer::CheckTimeout -- %s timed out (%ds) -- resetting\n",
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CheckTimeout -- %s timed out (%ds) -- resetting\n",
                 (nState == POOL_STATE_SIGNING) ? "Signing" : "Session", nTimeout);
         ChargeFees(connman);
         SetNull();
@@ -525,7 +526,7 @@ void CPrivateSendServer::CheckForCompleteQueue(CConnman& connman)
         SetState(POOL_STATE_ACCEPTING_ENTRIES);
 
         CDarksendQueue dsq(nSessionDenom, nSessionInputCount, activeMasternode.outpoint, GetAdjustedTime(), true);
-        LogPrint("privatesend", "CPrivateSendServer::CheckForCompleteQueue -- queue is ready, signing and relaying (%s)\n", dsq.ToString());
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CheckForCompleteQueue -- queue is ready, signing and relaying (%s)\n", dsq.ToString());
         dsq.Sign();
         dsq.Relay(connman);
     }
@@ -560,17 +561,17 @@ bool CPrivateSendServer::IsInputScriptSigValid(const CTxIn& txin)
 
     if(nTxInIndex >= 0) { //might have to do this one input at a time?
         txNew.vin[nTxInIndex].scriptSig = txin.scriptSig;
-        LogPrint("privatesend", "CPrivateSendServer::IsInputScriptSigValid -- verifying scriptSig %s\n", ScriptToAsmStr(txin.scriptSig).substr(0,24));
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::IsInputScriptSigValid -- verifying scriptSig %s\n", ScriptToAsmStr(txin.scriptSig).substr(0,24));
         if(!VerifyScript(txNew.vin[nTxInIndex].scriptSig, sigPubKey, SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC, MutableTransactionSignatureChecker(&txNew, nTxInIndex))) {
-            LogPrint("privatesend", "CPrivateSendServer::IsInputScriptSigValid -- VerifyScript() failed on input %d\n", nTxInIndex);
+            LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::IsInputScriptSigValid -- VerifyScript() failed on input %d\n", nTxInIndex);
             return false;
         }
     } else {
-        LogPrint("privatesend", "CPrivateSendServer::IsInputScriptSigValid -- Failed to find matching input in pool, %s\n", txin.ToString());
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::IsInputScriptSigValid -- Failed to find matching input in pool, %s\n", txin.ToString());
         return false;
     }
 
-    LogPrint("privatesend", "CPrivateSendServer::IsInputScriptSigValid -- Successfully validated input and scriptSig\n");
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::IsInputScriptSigValid -- Successfully validated input and scriptSig\n");
     return true;
 }
 
@@ -583,30 +584,30 @@ bool CPrivateSendServer::AddEntry(const CDarkSendEntry& entryNew, PoolMessage& n
 
     for (const auto& txin : entryNew.vecTxDSIn) {
         if(txin.prevout.IsNull()) {
-            LogPrint("privatesend", "CPrivateSendServer::AddEntry -- input not valid!\n");
+            LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::AddEntry -- input not valid!\n");
             nMessageIDRet = ERR_INVALID_INPUT;
             return false;
         }
     }
 
     if(!CPrivateSend::IsCollateralValid(*entryNew.txCollateral)) {
-        LogPrint("privatesend", "CPrivateSendServer::AddEntry -- collateral not valid!\n");
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::AddEntry -- collateral not valid!\n");
         nMessageIDRet = ERR_INVALID_COLLATERAL;
         return false;
     }
 
     if(GetEntriesCount() >= CPrivateSend::GetMaxPoolTransactions()) {
-        LogPrint("privatesend", "CPrivateSendServer::AddEntry -- entries is full!\n");
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::AddEntry -- entries is full!\n");
         nMessageIDRet = ERR_ENTRIES_FULL;
         return false;
     }
 
     for (const auto& txin : entryNew.vecTxDSIn) {
-        LogPrint("privatesend", "looking for txin -- %s\n", txin.ToString());
+        LogPrint(BCLog::PRIVATESEND, "looking for txin -- %s\n", txin.ToString());
         for (const auto& entry : vecEntries) {
             for (const auto& txdsin : entry.vecTxDSIn) {
                 if(txdsin.prevout == txin.prevout) {
-                    LogPrint("privatesend", "CPrivateSendServer::AddEntry -- found in txin\n");
+                    LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::AddEntry -- found in txin\n");
                     nMessageIDRet = ERR_ALREADY_HAVE;
                     return false;
                 }
@@ -616,7 +617,7 @@ bool CPrivateSendServer::AddEntry(const CDarkSendEntry& entryNew, PoolMessage& n
 
     vecEntries.push_back(entryNew);
 
-    LogPrint("privatesend", "CPrivateSendServer::AddEntry -- adding entry\n");
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::AddEntry -- adding entry\n");
     nMessageIDRet = MSG_ENTRIES_ADDED;
     nTimeLastSuccessfulStep = GetTime();
 
@@ -625,33 +626,33 @@ bool CPrivateSendServer::AddEntry(const CDarkSendEntry& entryNew, PoolMessage& n
 
 bool CPrivateSendServer::AddScriptSig(const CTxIn& txinNew)
 {
-    LogPrint("privatesend", "CPrivateSendServer::AddScriptSig -- scriptSig=%s\n", ScriptToAsmStr(txinNew.scriptSig).substr(0,24));
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::AddScriptSig -- scriptSig=%s\n", ScriptToAsmStr(txinNew.scriptSig).substr(0,24));
 
     for (const auto& entry : vecEntries) {
         for (const auto& txdsin : entry.vecTxDSIn) {
             if(txdsin.scriptSig == txinNew.scriptSig) {
-                LogPrint("privatesend", "CPrivateSendServer::AddScriptSig -- already exists\n");
+                LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::AddScriptSig -- already exists\n");
                 return false;
             }
         }
     }
 
     if(!IsInputScriptSigValid(txinNew)) {
-        LogPrint("privatesend", "CPrivateSendServer::AddScriptSig -- Invalid scriptSig\n");
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::AddScriptSig -- Invalid scriptSig\n");
         return false;
     }
 
-    LogPrint("privatesend", "CPrivateSendServer::AddScriptSig -- scriptSig=%s new\n", ScriptToAsmStr(txinNew.scriptSig).substr(0,24));
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::AddScriptSig -- scriptSig=%s new\n", ScriptToAsmStr(txinNew.scriptSig).substr(0,24));
 
     for (auto& txin : finalMutableTransaction.vin) {
         if(txin.prevout == txinNew.prevout && txin.nSequence == txinNew.nSequence) {
             txin.scriptSig = txinNew.scriptSig;
-            LogPrint("privatesend", "CPrivateSendServer::AddScriptSig -- adding to finalMutableTransaction, scriptSig=%s\n", ScriptToAsmStr(txinNew.scriptSig).substr(0,24));
+            LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::AddScriptSig -- adding to finalMutableTransaction, scriptSig=%s\n", ScriptToAsmStr(txinNew.scriptSig).substr(0,24));
         }
     }
     for(int i = 0; i < GetEntriesCount(); i++) {
         if(vecEntries[i].AddScriptSig(txinNew)) {
-            LogPrint("privatesend", "CPrivateSendServer::AddScriptSig -- adding to entries, scriptSig=%s\n", ScriptToAsmStr(txinNew.scriptSig).substr(0,24));
+            LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::AddScriptSig -- adding to entries, scriptSig=%s\n", ScriptToAsmStr(txinNew.scriptSig).substr(0,24));
             return true;
         }
     }
@@ -690,20 +691,20 @@ bool CPrivateSendServer::IsAcceptableDSA(const CDarksendAccept& dsa, PoolMessage
     // is denom even smth legit?
     std::vector<int> vecBits;
     if(!CPrivateSend::GetDenominationsBits(dsa.nDenom, vecBits)) {
-        LogPrint("privatesend", "CPrivateSendServer::%s -- denom not valid!\n", __func__);
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::%s -- denom not valid!\n", __func__);
         nMessageIDRet = ERR_DENOM;
         return false;
     }
 
     // check collateral
     if(!fUnitTest && !CPrivateSend::IsCollateralValid(dsa.txCollateral)) {
-        LogPrint("privatesend", "CPrivateSendServer::%s -- collateral not valid!\n", __func__);
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::%s -- collateral not valid!\n", __func__);
         nMessageIDRet = ERR_INVALID_COLLATERAL;
         return false;
     }
 
     if(dsa.nInputCount < 0 || dsa.nInputCount > PRIVATESEND_ENTRY_MAX_SIZE) {
-        LogPrint("privatesend", "CPrivateSendServer::%s -- requested count is not valid!\n", __func__);
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::%s -- requested count is not valid!\n", __func__);
         nMessageIDRet = ERR_INVALID_INPUT_COUNT;
         return false;
     }
@@ -740,7 +741,7 @@ bool CPrivateSendServer::CreateNewSession(const CDarksendAccept& dsa, PoolMessag
     if(!fUnitTest) {
         //broadcast that I'm accepting entries, only if it's the first entry through
         CDarksendQueue dsq(dsa.nDenom, dsa.nInputCount, activeMasternode.outpoint, GetAdjustedTime(), false);
-        LogPrint("privatesend", "CPrivateSendServer::CreateNewSession -- signing and relaying new queue: %s\n", dsq.ToString());
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CreateNewSession -- signing and relaying new queue: %s\n", dsq.ToString());
         dsq.Sign();
         dsq.Relay(connman);
         vecDarksendQueue.push_back(dsq);
@@ -796,7 +797,7 @@ bool CPrivateSendServer::AddUserToExistingSession(const CDarksendAccept& dsa, Po
 
 void CPrivateSendServer::RelayFinalTransaction(const CTransaction& txFinal, CConnman& connman)
 {
-    LogPrint("privatesend", "CPrivateSendServer::%s -- nSessionID: %d  nSessionDenom: %d (%s)\n",
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::%s -- nSessionID: %d  nSessionDenom: %d (%s)\n",
             __func__, nSessionID, nSessionDenom, CPrivateSend::GetDenominationsToString(nSessionDenom));
 
     // final mixing tx with empty signatures should be relayed to mixing participants only
@@ -859,7 +860,7 @@ void CPrivateSendServer::RelayStatus(PoolStatusUpdate nStatusUpdate, CConnman& c
 
 void CPrivateSendServer::RelayCompletedTransaction(PoolMessage nMessageID, CConnman& connman)
 {
-    LogPrint("privatesend", "CPrivateSendServer::%s -- nSessionID: %d  nSessionDenom: %d (%s)\n",
+    LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::%s -- nSessionID: %d  nSessionDenom: %d (%s)\n",
             __func__, nSessionID, nSessionDenom, CPrivateSend::GetDenominationsToString(nSessionDenom));
 
     // final mixing tx with empty signatures should be relayed to mixing participants only
@@ -882,7 +883,7 @@ void CPrivateSendServer::SetState(PoolState nStateNew)
     if(!fMasternodeMode) return;
 
     if(nStateNew == POOL_STATE_ERROR || nStateNew == POOL_STATE_SUCCESS) {
-        LogPrint("privatesend", "CPrivateSendServer::SetState -- Can't set state to ERROR or SUCCESS as a Masternode. \n");
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::SetState -- Can't set state to ERROR or SUCCESS as a Masternode. \n");
         return;
     }
 
