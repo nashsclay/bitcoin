@@ -5,6 +5,7 @@
 #ifndef PEERCOIN_KERNEL_H
 #define PEERCOIN_KERNEL_H
 
+#include <streams.h>
 #include <primitives/transaction.h> // CTransaction(Ref)
 
 class CBlockIndex;
@@ -35,7 +36,7 @@ bool CheckProofOfStake(CValidationState &state, CBlockIndex* pindexPrev, const C
 bool CheckCoinStakeTimestamp(int64_t nTimeBlock, int64_t nTimeTx);
 
 // Get stake modifier checksum
-unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex);
+//unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex);
 
 // Check stake modifier hard checkpoints
 bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierChecksum);

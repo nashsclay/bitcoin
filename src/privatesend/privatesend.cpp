@@ -14,14 +14,14 @@
 #include "messagesigner.h"
 #include "netfulfilledman.h"
 #include "netmessagemaker.h"
+#include "reverse_iterator.h"
 #include "script/sign.h"
 #include "shutdown.h"
 #include "txmempool.h"
 #include "util/moneystr.h"
 #include "util/system.h"
 #include "util/translation.h"
-
-#include <boost/lexical_cast.hpp>
+#include "wallet/wallet.h"
 
 bool CDarkSendEntry::AddScriptSig(const CTxIn& txin)
 {
@@ -271,8 +271,7 @@ bool CPrivateSend::IsCollateralValid(const CTransaction& txCollateral)
     for (const auto& txout : txCollateral.vout) {
         nValueOut += txout.nValue;
 
-        bool fAllowData = mnpayments.GetMinMasternodePaymentsProto() > 70208;
-        if(!txout.scriptPubKey.IsPayToPublicKeyHash() && !(fAllowData && txout.scriptPubKey.IsUnspendable())) {
+        if (!txout.scriptPubKey.IsUnspendable()) {
             LogPrintf ("CPrivateSend::IsCollateralValid -- Invalid Script, txCollateral=%s", txCollateral.ToString());
             return false;
         }
@@ -298,7 +297,7 @@ bool CPrivateSend::IsCollateralValid(const CTransaction& txCollateral)
     {
         LOCK(cs_main);
         CValidationState validationState;
-        if(!AcceptToMemoryPool(mempool, validationState, MakeTransactionRef(txCollateral), false, NULL, NULL, false, maxTxFee, true)) {
+        if(!AcceptToMemoryPool(mempool, validationState, MakeTransactionRef(txCollateral), nullptr, nullptr, false, DEFAULT_TRANSACTION_MAXFEE, true)) {
             LogPrint(BCLog::PRIVATESEND, "CPrivateSend::IsCollateralValid -- didn't pass AcceptToMemoryPool()\n");
             return false;
         }
@@ -419,7 +418,7 @@ int CPrivateSend::GetDenominationsByAmounts(const std::vector<CAmount>& vecAmoun
     CScript scriptTmp = CScript();
     std::vector<CTxOut> vecTxOut;
 
-    BOOST_REVERSE_FOREACH(CAmount nAmount, vecAmount) {
+    for (CAmount nAmount : reverse_iterate(vecAmount)) {
         CTxOut txout(nAmount, scriptTmp);
         vecTxOut.push_back(txout);
     }
@@ -438,30 +437,30 @@ bool CPrivateSend::IsDenominatedAmount(CAmount nInputAmount)
 std::string CPrivateSend::GetMessageByID(PoolMessage nMessageID)
 {
     switch (nMessageID) {
-        case ERR_ALREADY_HAVE:          return _("Already have that input.");
-        case ERR_DENOM:                 return _("No matching denominations found for mixing.");
-        case ERR_ENTRIES_FULL:          return _("Entries are full.");
-        case ERR_EXISTING_TX:           return _("Not compatible with existing transactions.");
-        case ERR_FEES:                  return _("Transaction fees are too high.");
-        case ERR_INVALID_COLLATERAL:    return _("Collateral not valid.");
-        case ERR_INVALID_INPUT:         return _("Input is not valid.");
-        case ERR_INVALID_SCRIPT:        return _("Invalid script detected.");
-        case ERR_INVALID_TX:            return _("Transaction not valid.");
-        case ERR_MAXIMUM:               return _("Entry exceeds maximum size.");
-        case ERR_MN_LIST:               return _("Not in the Masternode list.");
-        case ERR_MODE:                  return _("Incompatible mode.");
-        case ERR_NON_STANDARD_PUBKEY:   return _("Non-standard public key detected.");
-        case ERR_NOT_A_MN:              return _("This is not a Masternode."); // not used
-        case ERR_QUEUE_FULL:            return _("Masternode queue is full.");
-        case ERR_RECENT:                return _("Last PrivateSend was too recent.");
-        case ERR_SESSION:               return _("Session not complete!");
-        case ERR_MISSING_TX:            return _("Missing input transaction information.");
-        case ERR_VERSION:               return _("Incompatible version.");
-        case MSG_NOERR:                 return _("No errors detected.");
-        case MSG_SUCCESS:               return _("Transaction created successfully.");
-        case MSG_ENTRIES_ADDED:         return _("Your entries added successfully.");
-        case ERR_INVALID_INPUT_COUNT:   return _("Invalid input count.");
-        default:                        return _("Unknown response.");
+        case ERR_ALREADY_HAVE:          return _("Already have that input.").translated;
+        case ERR_DENOM:                 return _("No matching denominations found for mixing.").translated;
+        case ERR_ENTRIES_FULL:          return _("Entries are full.").translated;
+        case ERR_EXISTING_TX:           return _("Not compatible with existing transactions.").translated;
+        case ERR_FEES:                  return _("Transaction fees are too high.").translated;
+        case ERR_INVALID_COLLATERAL:    return _("Collateral not valid.").translated;
+        case ERR_INVALID_INPUT:         return _("Input is not valid.").translated;
+        case ERR_INVALID_SCRIPT:        return _("Invalid script detected.").translated;
+        case ERR_INVALID_TX:            return _("Transaction not valid.").translated;
+        case ERR_MAXIMUM:               return _("Entry exceeds maximum size.").translated;
+        case ERR_MN_LIST:               return _("Not in the Masternode list.").translated;
+        case ERR_MODE:                  return _("Incompatible mode.").translated;
+        case ERR_NON_STANDARD_PUBKEY:   return _("Non-standard public key detected.").translated;
+        case ERR_NOT_A_MN:              return _("This is not a Masternode.").translated; // not used
+        case ERR_QUEUE_FULL:            return _("Masternode queue is full.").translated;
+        case ERR_RECENT:                return _("Last PrivateSend was too recent.").translated;
+        case ERR_SESSION:               return _("Session not complete!").translated;
+        case ERR_MISSING_TX:            return _("Missing input transaction information.").translated;
+        case ERR_VERSION:               return _("Incompatible version.").translated;
+        case MSG_NOERR:                 return _("No errors detected.").translated;
+        case MSG_SUCCESS:               return _("Transaction created successfully.").translated;
+        case MSG_ENTRIES_ADDED:         return _("Your entries added successfully.").translated;
+        case ERR_INVALID_INPUT_COUNT:   return _("Invalid input count.").translated;
+        default:                        return _("Unknown response.").translated;
     }
 }
 
@@ -509,7 +508,7 @@ void CPrivateSend::SyncTransaction(const CTransaction& tx, const CBlockIndex *pi
     if (!mapDSTX.count(txHash)) return;
 
     // When tx is 0-confirmed or conflicted, posInBlock is SYNC_TRANSACTION_NOT_IN_BLOCK and nConfirmedHeight should be set to -1
-    mapDSTX[txHash].SetConfirmedHeight(posInBlock == CMainSignals::SYNC_TRANSACTION_NOT_IN_BLOCK ? -1 : pindex->nHeight);
+    mapDSTX[txHash].SetConfirmedHeight(pindex ? pindex->nHeight : -1);
     LogPrint(BCLog::PRIVATESEND, "CPrivateSendClient::SyncTransaction -- txid=%s\n", txHash.ToString());
 }
 
@@ -523,7 +522,7 @@ void ThreadCheckPrivateSend(CConnman& connman)
     fOneThread = true;
 
     // Make this thread recognisable as the PrivateSend thread
-    RenameThread("dash-ps");
+    util::ThreadRename("ps");
 
     unsigned int nTick = 0;
 

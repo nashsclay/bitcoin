@@ -6,12 +6,11 @@
 
 #include "base58.h"
 #include "chainparams.h"
+#include "key_io.h"
 #include "validation.h"
 #include "messagesigner.h"
 #include "net_processing.h"
 #include "netmessagemaker.h"
-
-#include <boost/lexical_cast.hpp>
 
 CSporkManager sporkManager;
 extern void Misbehaving(NodeId nodeid, int howmuch, const std::string& message="");
@@ -196,12 +195,16 @@ std::string CSporkManager::GetSporkNameByID(int nSporkID)
 }
 
 bool CSporkManager::SetSporkAddress(const std::string& strAddress) {
-    CBitcoinAddress address(strAddress);
-    if (!address.IsValid() || !address.GetKeyID(sporkPubKeyID)) {
-        LogPrintf("CSporkManager::SetSporkAddress -- Failed to parse spork address\n");
-        return false;
+    CTxDestination address = DecodeDestination(strAddress);
+    if (IsValidDestination(address)) {
+        const PKHash* pkhash = boost::get<PKHash>(&address);
+        if (pkhash) {
+            sporkPubKeyID = CKeyID(*pkhash);
+            return true;
+        }
     }
-    return true;
+    LogPrintf("CSporkManager::SetSporkAddress -- Failed to parse spork address\n");
+    return false;
 }
 
 bool CSporkManager::SetPrivKey(const std::string& strPrivKey)

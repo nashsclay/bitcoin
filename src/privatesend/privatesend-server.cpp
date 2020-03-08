@@ -15,6 +15,7 @@
 #include "txmempool.h"
 #include "util/moneystr.h"
 #include "util/system.h"
+#include "wallet/wallet.h"
 
 CPrivateSendServer privateSendServer;
 
@@ -46,7 +47,7 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
 
         LogPrint(BCLog::PRIVATESEND, "DSACCEPT -- nDenom %d (%s)  txCollateral %s", dsa.nDenom, CPrivateSend::GetDenominationsToString(dsa.nDenom), dsa.txCollateral.ToString());
 
-        if(dsa.nInputCount < 0 || dsa.nInputCount > PRIVATESEND_ENTRY_MAX_SIZE) return;
+        if(dsa.nInputCount < 0 || (unsigned)dsa.nInputCount > PRIVATESEND_ENTRY_MAX_SIZE) return;
 
         masternode_info_t mnInfo;
         if(!mnodeman.GetMasternodeInfo(activeMasternode.outpoint, mnInfo)) {
@@ -101,7 +102,7 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
         LogPrint(BCLog::PRIVATESEND, "DSQUEUE -- %s new\n", dsq.ToString());
 
         if(dsq.IsExpired()) return;
-        if(dsq.nInputCount < 0 || dsq.nInputCount > PRIVATESEND_ENTRY_MAX_SIZE) return;
+        if(dsq.nInputCount < 0 || (unsigned)dsq.nInputCount > PRIVATESEND_ENTRY_MAX_SIZE) return;
 
         masternode_info_t mnInfo;
         if(!mnodeman.GetMasternodeInfo(dsq.masternodeOutpoint, mnInfo)) return;
@@ -169,13 +170,13 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
             return;
         }
 
-        if(nSessionInputCount != 0 && entry.vecTxDSIn.size() != nSessionInputCount) {
+        if(nSessionInputCount != 0 && entry.vecTxDSIn.size() != (unsigned)nSessionInputCount) {
             LogPrintf("DSVIN -- ERROR: incorrect number of inputs! %d/%d\n", entry.vecTxDSIn.size(), nSessionInputCount);
             PushStatus(pfrom, STATUS_REJECTED, ERR_INVALID_INPUT_COUNT, connman);
             return;
         }
 
-        if(nSessionInputCount != 0 && entry.vecTxOut.size() != nSessionInputCount) {
+        if(nSessionInputCount != 0 && entry.vecTxOut.size() != (unsigned)nSessionInputCount) {
             LogPrintf("DSVIN -- ERROR: incorrect number of outputs! %d/%d\n", entry.vecTxOut.size(), nSessionInputCount);
             PushStatus(pfrom, STATUS_REJECTED, ERR_INVALID_INPUT_COUNT, connman);
             return;
@@ -204,7 +205,7 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
                     PushStatus(pfrom, STATUS_REJECTED, ERR_NON_STANDARD_PUBKEY, connman);
                     return;
                 }
-                if(!txout.scriptPubKey.IsPayToPublicKeyHash()) {
+                if(txout.scriptPubKey.IsPayToScriptHash()) {
                     LogPrintf("DSVIN -- invalid script! scriptPubKey=%s\n", ScriptToAsmStr(txout.scriptPubKey));
                     PushStatus(pfrom, STATUS_REJECTED, ERR_INVALID_SCRIPT, connman);
                     return;
@@ -325,14 +326,14 @@ void CPrivateSendServer::CreateFinalTransaction(CConnman& connman)
             txNew.vin.push_back(txdsin);
     }
 
-    sort(txNew.vin.begin(), txNew.vin.end(), CompareInputBIP69());
-    sort(txNew.vout.begin(), txNew.vout.end(), CompareOutputBIP69());
+    //sort(txNew.vin.begin(), txNew.vin.end(), CompareInputBIP69()); TODO
+    //sort(txNew.vout.begin(), txNew.vout.end(), CompareOutputBIP69());
 
     finalMutableTransaction = txNew;
     LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CreateFinalTransaction -- finalMutableTransaction=%s", txNew.ToString());
 
     // request signatures from clients
-    RelayFinalTransaction(finalMutableTransaction, connman);
+    RelayFinalTransaction(CTransaction(finalMutableTransaction), connman);
     SetState(POOL_STATE_SIGNING);
 }
 
@@ -350,7 +351,7 @@ void CPrivateSendServer::CommitFinalTransaction(CConnman& connman)
         TRY_LOCK(cs_main, lockMain);
         CValidationState validationState;
         mempool.PrioritiseTransaction(hashTx, 0.1*COIN);
-        if(!lockMain || !AcceptToMemoryPool(mempool, validationState, finalTransaction, false, NULL, NULL, false, maxTxFee, true))
+        if(!lockMain || !AcceptToMemoryPool(mempool, validationState, finalTransaction, nullptr, nullptr, false, DEFAULT_TRANSACTION_MAXFEE, true))
         {
             LogPrintf("CPrivateSendServer::CommitFinalTransaction -- AcceptToMemoryPool() error: Transaction not valid\n");
             SetNull();
@@ -452,11 +453,11 @@ void CPrivateSendServer::ChargeFees(CConnman& connman)
         LOCK(cs_main);
 
         CValidationState state;
-        if(!AcceptToMemoryPool(mempool, state, vecOffendersCollaterals[0], false, NULL, NULL, false, maxTxFee)) {
+        if(!AcceptToMemoryPool(mempool, state, vecOffendersCollaterals[0], nullptr, nullptr, false, DEFAULT_TRANSACTION_MAXFEE)) {
             // should never really happen
             LogPrintf("CPrivateSendServer::ChargeFees -- ERROR: AcceptToMemoryPool failed!\n");
         } else {
-            RelayTransaction(*vecOffendersCollaterals[0], connman);
+            RelayTransaction(vecOffendersCollaterals[0]->GetHash(), connman);
         }
     }
 }
@@ -484,11 +485,11 @@ void CPrivateSendServer::ChargeRandomFees(CConnman& connman)
         LogPrintf("CPrivateSendServer::ChargeRandomFees -- charging random fees, txCollateral=%s", txCollateral->ToString());
 
         CValidationState state;
-        if(!AcceptToMemoryPool(mempool, state, txCollateral, false, NULL, NULL, false, maxTxFee)) {
+        if(!AcceptToMemoryPool(mempool, state, txCollateral, nullptr, nullptr, false, DEFAULT_TRANSACTION_MAXFEE)) {
             // should never really happen
             LogPrintf("CPrivateSendServer::ChargeRandomFees -- ERROR: AcceptToMemoryPool failed!\n");
         } else {
-            RelayTransaction(*txCollateral, connman);
+            RelayTransaction(txCollateral->GetHash(), connman);
         }
     }
 }
@@ -562,7 +563,7 @@ bool CPrivateSendServer::IsInputScriptSigValid(const CTxIn& txin)
     if(nTxInIndex >= 0) { //might have to do this one input at a time?
         txNew.vin[nTxInIndex].scriptSig = txin.scriptSig;
         LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::IsInputScriptSigValid -- verifying scriptSig %s\n", ScriptToAsmStr(txin.scriptSig).substr(0,24));
-        if(!VerifyScript(txNew.vin[nTxInIndex].scriptSig, sigPubKey, SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC, MutableTransactionSignatureChecker(&txNew, nTxInIndex))) {
+        if(!VerifyScript(txNew.vin[nTxInIndex].scriptSig, sigPubKey, nullptr, SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC, MutableTransactionSignatureChecker(&txNew, nTxInIndex, 0))) { // TODO
             LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::IsInputScriptSigValid -- VerifyScript() failed on input %d\n", nTxInIndex);
             return false;
         }
@@ -697,13 +698,13 @@ bool CPrivateSendServer::IsAcceptableDSA(const CDarksendAccept& dsa, PoolMessage
     }
 
     // check collateral
-    if(!fUnitTest && !CPrivateSend::IsCollateralValid(dsa.txCollateral)) {
+    if(!fUnitTest && !CPrivateSend::IsCollateralValid(CTransaction(dsa.txCollateral))) {
         LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::%s -- collateral not valid!\n", __func__);
         nMessageIDRet = ERR_INVALID_COLLATERAL;
         return false;
     }
 
-    if(dsa.nInputCount < 0 || dsa.nInputCount > PRIVATESEND_ENTRY_MAX_SIZE) {
+    if(dsa.nInputCount < 0 || (unsigned)dsa.nInputCount > PRIVATESEND_ENTRY_MAX_SIZE) {
         LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::%s -- requested count is not valid!\n", __func__);
         nMessageIDRet = ERR_INVALID_INPUT_COUNT;
         return false;
@@ -902,7 +903,7 @@ void ThreadCheckPrivateSendServer(CConnman& connman)
     fOneThread = true;
 
     // Make this thread recognisable as the PrivateSend thread
-    RenameThread("dash-ps-server");
+    util::ThreadRename("ps-server");
 
     unsigned int nTick = 0;
 

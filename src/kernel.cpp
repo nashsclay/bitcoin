@@ -5,7 +5,8 @@
 
 #include <kernel.h>
 #include <chainparams.h>
-#include <util.h>
+#include <hash.h>
+#include <util/system.h>
 #include <validation.h>
 #include <streams.h>
 #include <timedata.h>
@@ -196,7 +197,7 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexCurrent, uint64_t &nStake
     for(int i = vSortedByTimestamp.size() - 1; i > 1; --i)
     std::swap(vSortedByTimestamp[i], vSortedByTimestamp[GetRand(i)]);
 
-    sort(vSortedByTimestamp.begin(), vSortedByTimestamp.end(), [] (const pair<int64_t, uint256> &a, const pair<int64_t, uint256> &b)
+    sort(vSortedByTimestamp.begin(), vSortedByTimestamp.end(), [] (const std::pair<int64_t, uint256> &a, const std::pair<int64_t, uint256> &b)
     {
         if (a.first != b.first)
             return a.first < b.first;
@@ -554,7 +555,7 @@ bool CheckCoinStakeTimestamp(int64_t nTimeBlock, int64_t nTimeTx)
 }
 
 // Get stake modifier checksum
-unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
+/*unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
 {
     assert(pindex->pprev || pindex->GetBlockHash() == Params().GetConsensus().hashGenesisBlock);
     // Hash previous checksum with flags, hashProofOfStake and nStakeModifier
@@ -565,7 +566,7 @@ unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
     arith_uint256 hashChecksum = UintToArith256(Hash(ss.begin(), ss.end()));
     hashChecksum >>= (256 - 32);
     return hashChecksum.GetLow64();
-}
+}*/
 
 // Check stake modifier hard checkpoints
 bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierChecksum)
