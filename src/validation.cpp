@@ -1138,8 +1138,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
  * Return transaction in txOut, and if it was found inside a block, its hash is placed in hashBlock.
  * If blockIndex is provided, the transaction is fetched from the corresponding block.
  */
-bool GetTransaction(const uint256& hash, CTransactionRef& txOut, const Consensus::Params& consensusParams, uint256& hashBlock, const CBlockIndex* const block_index)
+bool GetTransaction(const uint256& hash, CTransactionRef& txOut, const Consensus::Params& consensusParams, uint256& hashBlock, bool fAllowSlow, const CBlockIndex* const block_index)
 {
+    const CBlockIndex* pindexSlow = block_index;
+
     LOCK(cs_main);
 
     if (!block_index) {
@@ -1152,13 +1154,20 @@ bool GetTransaction(const uint256& hash, CTransactionRef& txOut, const Consensus
         if (g_txindex) {
             return g_txindex->FindTx(hash, hashBlock, txOut);
         }
-    } else {
+
+        if (fAllowSlow) { // use coin database to locate block that contains transaction, and scan it
+            const Coin& coin = AccessByTxid(::ChainstateActive().CoinsTip(), hash);
+            if (!coin.IsSpent()) pindexSlow = ::ChainActive()[coin.nHeight];
+        }
+    }
+
+    if (pindexSlow) {
         CBlock block;
-        if (ReadBlockFromDisk(block, block_index, consensusParams)) {
+        if (ReadBlockFromDisk(block, pindexSlow, consensusParams)) {
             for (const auto& tx : block.vtx) {
                 if (tx->GetHash() == hash) {
                     txOut = tx;
-                    hashBlock = block_index->GetBlockHash();
+                    hashBlock = pindexSlow->GetBlockHash();
                     return true;
                 }
             }
@@ -1603,9 +1612,6 @@ bool CheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsVi
         const Coin& coin = inputs.AccessCoin(prevout);
         assert(!coin.IsSpent());
 
-        //if (tx.IsCoinStake())
-            //continue;
-
         // We very carefully only pass in things to CScriptCheck which
         // are clearly committed to by tx' witness hash. This provides
         // a sanity check that our caching is not introducing consensus
@@ -1991,12 +1997,12 @@ static int64_t nTimeTotal = 0;
 static int64_t nBlocksTotal = 0;
 
 // These checks can only be done when all previous block have been added.
-bool ContextualCheckPoSBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex, bool fJustCheck)
+bool ContextualCheckPoSBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex, const Consensus::Params& params, bool fJustCheck)
 {
     uint256 hashProofOfStake = uint256();
     // peercoin: verify hash target and signature of coinstake tx
     if (block.IsProofOfStake() && !CheckProofOfStake(state, pindex->pprev, block.vtx[1], block.nBits, block.nTime, hashProofOfStake)) {
-        LogPrintf("WARNING: %s: check proof-of-stake failed for block %s\n", __func__, block.GetHash().ToString());
+        LogPrintf("WARNING: %s: check proof-of-stake failed for block %s\n", __func__, pindex->GetBlockHash().ToString());
         return false; // do not error here as we expect this during initial block download
     }
 
@@ -2006,8 +2012,12 @@ bool ContextualCheckPoSBlock(const CBlock& block, CValidationState& state, CBloc
     // peercoin: compute stake modifier
     uint64_t nStakeModifier = 0;
     bool fGeneratedStakeModifier = false;
-    if (!ComputeNextStakeModifier(pindex, nStakeModifier, fGeneratedStakeModifier))
+    if (pindex->nHeight < params.nMandatoryUpgradeBlock && !ComputeNextStakeModifier(pindex, nStakeModifier, fGeneratedStakeModifier))
         return error("ConnectBlock() : ComputeNextStakeModifier() failed");
+    else {
+        nStakeModifier = ComputeStakeModifierV2(pindex->pprev, pindex->GetBlockHash());
+        fGeneratedStakeModifier = true;
+    }
 
   // compute nStakeModifierChecksum begin
     /*unsigned int nFlagsBackup      = pindex->nFlags;
@@ -2062,7 +2072,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     assert(*pindex->phashBlock == block.GetHash());
     int64_t nTimeStart = GetTimeMicros();
 
-    if (pindex->nStakeModifier == 0 && /*pindex->nStakeModifierChecksum == 0 &&*/ !ContextualCheckPoSBlock(block, state, pindex, fJustCheck))
+    if ((pindex->nStakeModifier == 0 || !pindex->GeneratedStakeModifier()) && /*pindex->nStakeModifierChecksum == 0 &&*/ !ContextualCheckPoSBlock(block, state, pindex, chainparams.GetConsensus(), fJustCheck))
         return error("%s: failed PoS check %s", __func__, FormatStateMessage(state));
 
     // Check it again in case a previous version let a bad block in
@@ -2094,11 +2104,11 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
 
     // Special case for the genesis block, skipping connection of its transactions
     // (its coinbase is unspendable)
-    if (block.GetHash() == chainparams.GetConsensus().hashGenesisBlock) {
+    /*if (pindex->GetBlockHash() == chainparams.GetConsensus().hashGenesisBlock) {
         if (!fJustCheck)
             view.SetBestBlock(pindex->GetBlockHash());
         return true;
-    }
+    }*/
 
     bool fProofOfStake = block.IsProofOfStake();
     if (!fProofOfStake && (pindex->nHeight > chainparams.GetConsensus().nLastPoWBlock)) {
@@ -2211,7 +2221,8 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     // post BIP34 before approximately height 486,000,000 and presumably will
     // be reset before it reaches block 1,983,702 and starts doing unnecessary
     // BIP30 checking again.
-    assert(pindex->pprev);
+    if (pindex->GetBlockHash() != chainparams.GetConsensus().hashGenesisBlock)
+        assert(pindex->pprev);
     //CBlockIndex *pindexBIP34height = pindex->pprev->GetAncestor(chainparams.GetConsensus().BIP34Height);
     //Only continue to enforce if we're below BIP34 activation height or the block hash at that height doesn't correspond.
     //fEnforceBIP30 = fEnforceBIP30 && (!pindexBIP34height || !(pindexBIP34height->GetBlockHash() == chainparams.GetConsensus().BIP34Hash));
@@ -2235,7 +2246,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     // make sure old budget is the real one
     if (pindex->nHeight == chainparams.GetConsensus().nSuperblockStartBlock &&
         chainparams.GetConsensus().nSuperblockStartHash != uint256() &&
-        block.GetHash() != chainparams.GetConsensus().nSuperblockStartHash)
+        pindex->GetBlockHash() != chainparams.GetConsensus().nSuperblockStartHash)
             return state.Invalid(ValidationInvalidReason::CONSENSUS, error("%s: invalid superblock start", __func__),
                              REJECT_INVALID, "bad-sb-start");
 
@@ -2369,7 +2380,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     }
 
     if (!IsBlockPayeeValid(fProofOfStake ? *block.vtx[1] : *block.vtx[0], pindex->nHeight, blockReward)) {
-        //mapRejectedBlocks.insert(std::make_pair(block.GetHash(), GetTime()));
+        //mapRejectedBlocks.insert(std::make_pair(pindex->GetBlockHash(), GetTime()));
         return state.Invalid(ValidationInvalidReason::RECENT_CONSENSUS_CHANGE, error("ConnectBlock(DASH): couldn't find masternode or superblock payments"),
                                 REJECT_INVALID, "bad-cb-payee");
         //return state.DoS(0, error("ConnectBlock(DASH): couldn't find masternode or superblock payments"),
@@ -2394,7 +2405,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     if (gArgs.GetBoolArg("-printcreation", false))
         LogPrintf("%s: destroy=%s nFees=%lld\n", __func__, FormatMoney(nFees), nFees);
 
-    if (!WriteUndoDataForBlock(blockundo, state, pindex, chainparams))
+    if (pindex->GetBlockHash() != chainparams.GetConsensus().hashGenesisBlock && !WriteUndoDataForBlock(blockundo, state, pindex, chainparams))
         return false;
 
     if (!pindex->IsValid(BLOCK_VALID_SCRIPTS)) {
@@ -3526,6 +3537,10 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
     if (IsPoS && (voutSize < 1 || voutSize > 2 || block.vtx[0]->GetValueOut() != 0 || !block.vtx[0]->vout[0].IsEmpty() || (voutSize == 2 && block.vtx[0]->vout[1].scriptPubKey[0] != OP_RETURN)))
         return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-cb-notempty", "coinbase output not empty in PoS block");
 
+    // Coinbase/coinstake transaction must be correct version
+    //if (block.vtx[0]->nVersion != CTransaction::CURRENT_VERSION || (IsPoS && block.vtx[1]->nVersion != CTransaction::CURRENT_VERSION))
+        //return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-cb-version", "coinbase version is invalid");
+
     // DASH : CHECK TRANSACTIONS FOR INSTANTSEND
 
     if (sporkManager.IsSporkActive(SPORK_3_INSTANTSEND_BLOCK_FILTERING)) {
@@ -3556,10 +3571,15 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
 
     // Check transactions
     // Must check for duplicate inputs (see CVE-2018-17144)
-    for (const auto& tx : block.vtx)
+    bool fEnforceNewTransactionVersion = block.nVersion >= consensusParams.nUpgradeBlockVersion;
+    for (const auto& tx : block.vtx) {
         if (!CheckTransaction(*tx, state, true))
             return state.Invalid(state.GetReason(), false, state.GetRejectCode(), state.GetRejectReason(),
                                  strprintf("Transaction check failed (tx hash %s) %s", tx->GetHash().ToString(), state.GetDebugMessage()));
+
+        if (fEnforceNewTransactionVersion && tx->nVersion < CTransaction::CURRENT_VERSION)
+            return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-tx-version", strprintf("transaction %s has invalid version %u", tx->GetHash().ToString(), tx->nVersion));
+    }
 
     unsigned int nSigOps = 0;
     for (const auto& tx : block.vtx)
@@ -4007,7 +4027,7 @@ bool CChainState::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, CVali
     }
 
     // peercoin: check PoS
-    if (fCheckPoS && !ContextualCheckPoSBlock(block, state, pindex, false)) {
+    if (fCheckPoS && !ContextualCheckPoSBlock(block, state, pindex, chainparams.GetConsensus(), false)) {
         pindex->nStatus |= BLOCK_FAILED_VALID;
         setDirtyBlockIndex.insert(pindex);
         return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-pos", "proof of stake is incorrect");
