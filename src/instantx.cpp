@@ -94,9 +94,9 @@ void CInstantSend::ProcessMessage(CNode* pfrom, const std::string& strCommand, C
 bool CInstantSend::ProcessTxLockRequest(const CTxLockRequest& txLockRequest, CConnman& connman)
 {
     LOCK(cs_main);
-#ifdef ENABLE_WALLET
+/*#ifdef ENABLE_WALLET
     LOCK(pwalletMain ? &pwalletMain->cs_wallet : NULL);
-#endif
+#endif*/
     LOCK2(mempool.cs, cs_instantsend);
 
     uint256 txHash = txLockRequest.GetHash();
@@ -193,9 +193,9 @@ void CInstantSend::CreateEmptyTxLockCandidate(const uint256& txHash)
 void CInstantSend::Vote(const uint256& txHash, CConnman& connman)
 {
     AssertLockHeld(cs_main);
-#ifdef ENABLE_WALLET
+/*#ifdef ENABLE_WALLET
     LOCK(pwalletMain ? &pwalletMain->cs_wallet : NULL);
-#endif
+#endif*/
 
     CTxLockRequest dummyRequest;
     CTxLockCandidate txLockCandidate(dummyRequest);
@@ -330,9 +330,9 @@ bool CInstantSend::ProcessNewTxLockVote(CNode* pfrom, const CTxLockVote& vote, C
     vote.Relay(connman);
 
     AssertLockHeld(cs_main);
-#ifdef ENABLE_WALLET
+/*#ifdef ENABLE_WALLET
     LOCK(pwalletMain ? &pwalletMain->cs_wallet : NULL);
-#endif
+#endif*/
     LOCK2(mempool.cs, cs_instantsend);
 
     // Masternodes will sometimes propagate votes before the transaction is known to the client,
@@ -401,10 +401,10 @@ bool CInstantSend::ProcessOrphanTxLockVote(const CTxLockVote& vote)
 {
     // cs_main, cs_wallet and cs_instantsend should be already locked
     AssertLockHeld(cs_main);
-#ifdef ENABLE_WALLET
+/*#ifdef ENABLE_WALLET
     if (pwalletMain)
         AssertLockHeld(pwalletMain->cs_wallet);
-#endif
+#endif*/
     AssertLockHeld(cs_instantsend);
 
     uint256 txHash = vote.GetTxHash();
@@ -512,10 +512,10 @@ void CInstantSend::UpdateLockedTransaction(const CTxLockCandidate& txLockCandida
 {
     // cs_main, cs_wallet and cs_instantsend should be already locked
     AssertLockHeld(cs_main);
-#ifdef ENABLE_WALLET
+/*#ifdef ENABLE_WALLET
     if (pwalletMain)
         AssertLockHeld(pwalletMain->cs_wallet);
-#endif
+#endif*/
     AssertLockHeld(cs_instantsend);
 
     uint256 txHash = txLockCandidate.GetHash();
@@ -626,7 +626,7 @@ bool CInstantSend::ResolveConflicts(const CTxLockCandidate& txLockCandidate)
     // No conflicts were found so far, check to see if it was already included in block
     CTransactionRef txTmp;
     uint256 hashBlock;
-    if(GetTransaction(txHash, txTmp, Params().GetConsensus(), hashBlock/*, true*/) && hashBlock != uint256()) {
+    if(GetTransaction(txHash, txTmp, Params().GetConsensus(), hashBlock, true, nullptr) && hashBlock != uint256()) {
         LogPrint(BCLog::INSTANTSEND, "CInstantSend::ResolveConflicts -- Done, %s is included in block %s\n", txHash.ToString(), hashBlock.ToString());
         return true;
     }

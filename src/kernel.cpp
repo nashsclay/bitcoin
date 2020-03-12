@@ -1,5 +1,6 @@
 // Copyright (c) 2012-2020 The Peercoin developers
 // Copyright (c) 2015-2019 The PIVX developers
+// Copyright (c) 2020 ComputerCraftr
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -288,8 +289,8 @@ uint64_t ComputeStakeModifierV2(const CBlockIndex* pindexPrev, const uint256& ke
     CHashWriter ss(SER_GETHASH, 0);
     ss << kernel;
 
-    // switch with old modifier on upgrade block
-    //if (!Params().GetConsensus().IsStakeModifierV2(pindexPrev->nHeight + 1))
+    // switch with old modifier on upgrade block - PIVX
+    //if (!Params().IsStakeModifierV2(pindexPrev->nHeight + 1))
         ss << pindexPrev->nStakeModifier;
     //else
         //ss << pindexPrev->nStakeModifierV2;
@@ -300,9 +301,9 @@ uint64_t ComputeStakeModifierV2(const CBlockIndex* pindexPrev, const uint256& ke
 // V0.5: Stake modifier used to hash for a stake kernel is chosen as the stake
 // modifier that is (nStakeMinAge minus a selection interval) earlier than the
 // stake, thus at least a selection interval later than the coin generating the // kernel, as the generating coin is from at least nStakeMinAge ago.
-static bool GetKernelStakeModifierV05(CBlockIndex* pindexPrev, unsigned int nTimeTx, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
+static bool GetKernelStakeModifierV05(CBlockIndex* pindexPrev, unsigned int nTimeTx, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
 {
-    const Consensus::Params& params = Params().GetConsensus();
+    //const Consensus::Params& params = Params().GetConsensus();
     const CBlockIndex* pindex = pindexPrev;
     nStakeModifierHeight = pindex->nHeight;
     nStakeModifierTime = pindex->GetBlockTime();
@@ -339,9 +340,13 @@ static bool GetKernelStakeModifierV05(CBlockIndex* pindexPrev, unsigned int nTim
 
 // V0.3: Stake modifier used to hash for a stake kernel is chosen as the stake
 // modifier about a selection interval later than the coin generating the kernel
-static bool GetKernelStakeModifierV03(CBlockIndex* pindexPrev, uint256 hashBlockFrom, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
+//
+// This stake kernel is vulnerable to grinding because the selected stake modifier for a given input will never change, so
+// the input can be resent in an attempt to get a more favorable kernel if it is determined that the input will not produce
+// a stake (generate a small enough hashProofOfStake) within a reasonable amount of time (nTimeTx not too far in the future)
+static bool GetKernelStakeModifierV03(CBlockIndex* pindexPrev, uint256 hashBlockFrom, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
 {
-    const Consensus::Params& params = Params().GetConsensus();
+    //const Consensus::Params& params = Params().GetConsensus();
     nStakeModifier = 0;
     const CBlockIndex* pindexFrom = LookupBlockIndex(hashBlockFrom);
     if (!pindexFrom)
@@ -414,12 +419,26 @@ bool stakeTargetHit(const uint256& hashProofOfStake, int64_t nValueIn, const ari
 }
 
 // Get the stake modifier specified by the protocol to hash for a stake kernel
-static bool GetKernelStakeModifier(CBlockIndex* pindexPrev, uint256 hashBlockFrom, unsigned int nTimeTx, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
+static bool GetKernelStakeModifier(CBlockIndex* pindexPrev, uint256 hashBlockFrom, unsigned int nTimeTx, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
 {
-    //if (IsProtocolV05(nTimeTx))
-        //return GetKernelStakeModifierV05(pindexPrev, nTimeTx, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake);
-    //else
-        return GetKernelStakeModifierV03(pindexPrev, hashBlockFrom, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake);
+    // Hash the modifier - PIVX
+    /*if (Params().IsStakeModifierV2(pindexPrev->nHeight + 1)) {
+        // Modifier v2
+        //modifier_ss << pindexPrev->nStakeModifierV2;
+        nStakeModifier = pindexPrev->nStakeModifier;
+        nStakeModifierHeight = pindexPrev->nHeight;
+        nStakeModifierTime = pindexPrev->GetBlockTime();
+        return true;
+    }*/
+
+    // Peercoin stake modifier selection for kernel
+    if (pindexPrev->nHeight + 1 >= params.nMandatoryUpgradeBlock) //IsProtocolV05(nTimeTx)
+        return GetKernelStakeModifierV05(pindexPrev, nTimeTx, params, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake);
+    else {
+        // This is only here for backwards compatibility with very old PIVX forks; it should not be used in new production code due to the
+        // stake grinding vulnerability (it can be replaced by hard coded or bypassed modifiers on old blocks when it is no longer being used)
+        return GetKernelStakeModifierV03(pindexPrev, hashBlockFrom, params, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake);
+    }
 }
 
 // peercoin kernel protocol
@@ -480,8 +499,8 @@ bool CheckStakeKernelHash(const unsigned int& nBits, CBlockIndex* pindexPrev, co
     int64_t nStakeModifierTime = 0;
     //if (IsProtocolV03(nTimeTx))  // v0.3 protocol
     {
-        if (!GetKernelStakeModifier(pindexPrev, pindexFrom->GetBlockHash(), nTimeTx, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake)) {
-            LogPrintf("CheckStakeKernelHash() : failed to get kernel stake modifier \n");
+        if (!GetKernelStakeModifier(pindexPrev, pindexFrom->GetBlockHash(), nTimeTx, params, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake)) {
+            LogPrintf("CheckStakeKernelHash() : failed to get kernel stake modifier\n");
             return false;
         }
         ss << nStakeModifier;
@@ -504,13 +523,14 @@ bool CheckStakeKernelHash(const unsigned int& nBits, CBlockIndex* pindexPrev, co
             LogPrintf("CheckStakeKernelHash() : check protocol=%s modifier=0x%016x nTimeBlockFrom=%u prevoutHash=%s nTimeTxPrev=%u nPrevout=%u nTimeTx=%u hashProof=%s\n",
                 //IsProtocolV05(nTimeTx) ? "0.5" : (IsProtocolV03(nTimeTx) ? "0.3" : "0.2"),
                 //IsProtocolV03(nTimeTx) ? nStakeModifier : (uint64_t) nBits,
-                "0.3", nStakeModifier,
+                pindexPrev->nHeight + 1 >= params.nMandatoryUpgradeBlock ? "0.5" : "0.3", nStakeModifier,
                 nTimeBlockFrom, prevout.hash.ToString(), nTimeBlockFrom, prevout.n, nTimeTx,
                 hashProofOfStake.ToString());
         }
         return stakeTargetHit(hashProofOfStake, nValueIn, bnTargetPerCoinDay);
     }
 
+    // nHashDrift should be <= MAX_FUTURE_BLOCK_TIME otherwise we risk creating a block which will be rejected due to nTimeTx being too far in the future
     bool fSuccess = false;
     unsigned int nTryTime = 0;
     unsigned int i;
@@ -542,7 +562,7 @@ bool CheckStakeKernelHash(const unsigned int& nBits, CBlockIndex* pindexPrev, co
             LogPrintf("CheckStakeKernelHash() : pass protocol=%s modifier=0x%016x nTimeBlockFrom=%u prevoutHash=%s nTimeTxPrev=%u nPrevout=%u nTimeTx=%u hashProof=%s\n",
                 //IsProtocolV03(nTimeTx) ? "0.3" : "0.2",
                 //IsProtocolV03(nTimeTx) ? nStakeModifier : (uint64_t) nBits,
-                "0.3", nStakeModifier,
+                pindexPrev->nHeight + 1 >= params.nMandatoryUpgradeBlock ? "0.5" : "0.3", nStakeModifier,
                 nTimeBlockFrom, prevout.hash.ToString(), nTimeBlockFrom, prevout.n, nTryTime,
                 hashProofOfStake.ToString());
         }
@@ -568,7 +588,7 @@ bool CheckProofOfStake(CValidationState &state, CBlockIndex* pindexPrev, const C
     // Get transaction index for the previous transaction
     uint256 hashBlock;
     CTransactionRef txPrev;
-    if (!GetTransaction(txin.prevout.hash, txPrev, Params().GetConsensus(), hashBlock, true))
+    if (!GetTransaction(txin.prevout.hash, txPrev, Params().GetConsensus(), hashBlock, true, nullptr))
         return error("CheckProofOfStake() : tx index not found");  // tx index not found
 
     // Read txPrev and header of its block

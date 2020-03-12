@@ -353,7 +353,7 @@ static bool rest_tx(HTTPRequest* req, const std::string& strURIPart)
 
     CTransactionRef tx;
     uint256 hashBlock = uint256();
-    if (!GetTransaction(hash, tx, Params().GetConsensus(), hashBlock))
+    if (!GetTransaction(hash, tx, Params().GetConsensus(), hashBlock, false, nullptr))
         return RESTERR(req, HTTP_NOT_FOUND, hashStr + " not found");
 
     switch (rf) {
