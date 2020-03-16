@@ -669,19 +669,19 @@ bool IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned int nRe
 unsigned int GetStakeEntropyBit(const CBlock& block)
 {
     unsigned int nEntropyBit = 0;
-    /*if (IsProtocolV04(block.nTime))
+    if (block.nVersion >= Params().GetConsensus().nUpgradeBlockVersion) //IsProtocolV04(block.nTime)
     {
-        nEntropyBit = UintToArith256(block.GetHash()).GetLow64() & 1llu;// last bit of block hash
+        nEntropyBit = UintToArith256(block.GetHash()).GetLow64() & 1llu; // last bit of block hash
         if (gArgs.GetBoolArg("-printstakemodifier", false))
             LogPrintf("GetStakeEntropyBit(v0.4+): nTime=%u hashBlock=%s entropybit=%d\n", block.nTime, block.GetHash().ToString(), nEntropyBit);
     }
-    else*/
+    else
     {
         // old protocol for entropy bit pre v0.4
         uint160 hashSig = Hash160(block.vchBlockSig);
         if (gArgs.GetBoolArg("-printstakemodifier", false))
             LogPrintf("GetStakeEntropyBit(v0.3): nTime=%u hashSig=%s", block.nTime, hashSig.ToString());
-        nEntropyBit = hashSig.GetDataPtr()[4] >> 31;  // take the first bit of the hash
+        nEntropyBit = hashSig.GetDataPtr()[4] >> 31; // take the first bit of the hash
         if (gArgs.GetBoolArg("-printstakemodifier", false))
             LogPrintf(" entropybit=%d\n", nEntropyBit);
     }

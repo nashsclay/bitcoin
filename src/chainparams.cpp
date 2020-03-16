@@ -75,6 +75,7 @@ public:
         consensus.nGovernanceMinQuorum = 10;
         consensus.nGovernanceFilterElements = 20000;
         consensus.nMasternodeMinimumConfirmations = 15;
+        consensus.nMasternodeCollateral = 200000 * COIN;
         consensus.nLastPoWBlock = 2100000000;
         consensus.nMandatoryUpgradeBlock = 1;
         consensus.nUpgradeBlockVersion = 8; //Block headers must be at least this version after upgrade block
@@ -204,6 +205,7 @@ public:
         consensus.nGovernanceMinQuorum = 1;
         consensus.nGovernanceFilterElements = 500;
         consensus.nMasternodeMinimumConfirmations = 1;
+        consensus.nMasternodeCollateral = 200000 * COIN;
         consensus.nLastPoWBlock = 2100000000;
         consensus.nMandatoryUpgradeBlock = 1;
         consensus.nUpgradeBlockVersion = 8; //Block headers must be at least this version after upgrade block
@@ -310,6 +312,7 @@ public:
         consensus.nGovernanceMinQuorum = 1;
         consensus.nGovernanceFilterElements = 100;
         consensus.nMasternodeMinimumConfirmations = 1;
+        consensus.nMasternodeCollateral = 100 * COIN;
         consensus.nLastPoWBlock = 2100000000;
         consensus.nMandatoryUpgradeBlock = 1;
         consensus.nUpgradeBlockVersion = 8; //Block headers must be at least this version after upgrade block
