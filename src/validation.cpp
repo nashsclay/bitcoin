@@ -1296,7 +1296,7 @@ bool ReadRawBlockFromDisk(std::vector<uint8_t>& block, const CBlockIndex* pindex
 
 CAmount GetBlockSubsidy(int nHeight, bool fProofOfStake, uint64_t nCoinAge, const Consensus::Params& consensusParams, bool fSuperblockPartOnly)
 {
-    if (nHeight <= 0) return 0;
+    if (nHeight < 0) return 0;
 
     CAmount nRewardCoinYear = 10 * CENT; // 10% interest
     CAmount nRewardCoinYearOld = 22.38 * CENT; // 22.38% interest

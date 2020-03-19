@@ -842,7 +842,7 @@ fs::path GetConfigFile(const std::string& confPath)
 
 fs::path GetMasternodeConfigFile()
 {
-    return AbsPathForConfigVal(fs::path(GetArg("-mnconf", MASTERNODE_CONF_FILENAME)), false);
+    return AbsPathForConfigVal(fs::path(gArgs.GetArg("-mnconf", MASTERNODE_CONF_FILENAME)), false);
 }
 
 static std::string TrimString(const std::string& str, const std::string& pattern)

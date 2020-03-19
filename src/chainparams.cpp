@@ -5,6 +5,7 @@
 
 #include <chainparams.h>
 
+#include <arith_uint256.h>
 #include <chainparamsseeds.h>
 #include <consensus/merkle.h>
 #include <tinyformat.h>
@@ -35,6 +36,19 @@ static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesi
     genesis.vtx.push_back(MakeTransactionRef(std::move(txNew)));
     genesis.hashPrevBlock.SetNull();
     genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
+
+    arith_uint256 hashTarget = arith_uint256().SetCompact(genesis.nBits);
+    /*while (true) {
+        arith_uint256 hash = UintToArith256(genesis.GetHash());
+        if (hash <= hashTarget) {
+            // Found a solution
+            printf("genesis block found\n   hash: %s\n target: %s\n  nonce: %u\n", hash.ToString().c_str(), hashTarget.ToString().c_str(), genesis.nNonce);
+            break;
+        }
+        genesis.nNonce += 1;
+    }*/
+    assert(UintToArith256(genesis.GetHash()) <= hashTarget);
+
     return genesis;
 }
 
@@ -78,7 +92,7 @@ public:
         consensus.nMasternodeCollateral = 200000 * COIN;
         consensus.nLastPoWBlock = 2100000000;
         consensus.nMandatoryUpgradeBlock = 1;
-        consensus.nUpgradeBlockVersion = 8; //Block headers must be at least this version after upgrade block
+        consensus.nUpgradeBlockVersion = 8; // Block headers must be at least this version after upgrade block
         consensus.BIP16Exception = uint256S("0x0000000000000000000000000000000000000000000000000000000000000000");
         consensus.BIP34Height = 227931;
         consensus.BIP34Hash = uint256S("0x000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8");
@@ -124,6 +138,8 @@ public:
 
         genesis = CreateGenesisBlock(1231006505, 2083236893, 0x1d00ffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
+        //printf("Merkle hash mainnet: %s\n", genesis.hashMerkleRoot.ToString().c_str());
+        //printf("Genesis hash mainnet: %s\n", consensus.hashGenesisBlock.ToString().c_str());
         assert(consensus.hashGenesisBlock == uint256S("0x000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"));
         assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
 
@@ -208,7 +224,7 @@ public:
         consensus.nMasternodeCollateral = 200000 * COIN;
         consensus.nLastPoWBlock = 2100000000;
         consensus.nMandatoryUpgradeBlock = 1;
-        consensus.nUpgradeBlockVersion = 8; //Block headers must be at least this version after upgrade block
+        consensus.nUpgradeBlockVersion = 8; // Block headers must be at least this version after upgrade block
         consensus.BIP16Exception = uint256S("0x0000000000000000000000000000000000000000000000000000000000000000");
         consensus.BIP34Height = 21111;
         consensus.BIP34Hash = uint256S("0x0000000023b3a96d3484e5abb3755c413e7d41500f8e2a5c3f0dd01299cd8ef8");
@@ -249,6 +265,8 @@ public:
 
         genesis = CreateGenesisBlock(1296688602, 414098458, 0x1d00ffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
+        //printf("Merkle hash testnet: %s\n", genesis.hashMerkleRoot.ToString().c_str());
+        //printf("Genesis hash testnet: %s\n", consensus.hashGenesisBlock.ToString().c_str());
         assert(consensus.hashGenesisBlock == uint256S("0x000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"));
         assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
 
@@ -315,7 +333,7 @@ public:
         consensus.nMasternodeCollateral = 100 * COIN;
         consensus.nLastPoWBlock = 2100000000;
         consensus.nMandatoryUpgradeBlock = 1;
-        consensus.nUpgradeBlockVersion = 8; //Block headers must be at least this version after upgrade block
+        consensus.nUpgradeBlockVersion = 8; // Block headers must be at least this version after upgrade block
         consensus.BIP16Exception = uint256();
         consensus.BIP34Height = 500; // BIP34 activated on regtest (Used in functional tests)
         consensus.BIP34Hash = uint256();
@@ -358,6 +376,8 @@ public:
 
         genesis = CreateGenesisBlock(1296688602, 2, 0x207fffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
+        //printf("Merkle hash regtest: %s\n", genesis.hashMerkleRoot.ToString().c_str());
+        //printf("Genesis hash regtest: %s\n", consensus.hashGenesisBlock.ToString().c_str());
         assert(consensus.hashGenesisBlock == uint256S("0x0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"));
         assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
 
@@ -402,7 +422,6 @@ public:
     }
     void UpdateActivationParametersFromArgs(const ArgsManager& args);
 };
-static CRegTestParams regTestParams;
 
 void CRegTestParams::UpdateActivationParametersFromArgs(const ArgsManager& args)
 {
@@ -460,8 +479,6 @@ const CChainParams &Params(const std::string& chain)
         return mainParams;
     else if (chain == CBaseChainParams::TESTNET)
         return testNetParams;
-    else if (chain == CBaseChainParams::REGTEST)
-        return regTestParams;
     else
         throw std::runtime_error(strprintf("%s: Unknown chain %s.", __func__, chain));
 }

@@ -6,22 +6,22 @@
 CKeyHolder::CKeyHolder(CWallet* pwallet) :
     reserveKey(pwallet)
 {
-    reserveKey.GetReservedKey(pubKey, false);
+    reserveKey.GetReservedDestination(OutputType::BECH32, dest, false); //OutputType::LEGACY TODO CHECK IF THIS IS OKAY OR IF DEFAULT ADDRESS TYPE SHOULD BE USED
 }
 
-void CKeyHolder::KeepKey()
+void CKeyHolder::KeepDestination()
 {
-    reserveKey.KeepKey();
+    reserveKey.KeepDestination();
 }
 
-void CKeyHolder::ReturnKey()
+void CKeyHolder::ReturnDestination()
 {
-    reserveKey.ReturnKey();
+    reserveKey.ReturnDestination();
 }
 
 CScript CKeyHolder::GetScriptForDestination() const
 {
-    return ::GetScriptForDestination(pubKey.GetID());
+    return ::GetScriptForDestination(dest);
 }
 
 
@@ -40,14 +40,14 @@ void CKeyHolderStorage::KeepAll()
 {
     std::vector<std::unique_ptr<CKeyHolder>> tmp;
     {
-        // don't hold cs_storage while calling KeepKey(), which might lock cs_wallet
+        // don't hold cs_storage while calling KeepDestination(), which might lock cs_wallet
         LOCK(cs_storage);
         std::swap(storage, tmp);
     }
 
     if (tmp.size() > 0) {
         for (auto &key : tmp) {
-            key->KeepKey();
+            key->KeepDestination();
         }
         LogPrintf("CKeyHolderStorage::%s -- %lld keys kept\n", __func__, tmp.size());
     }
@@ -57,14 +57,14 @@ void CKeyHolderStorage::ReturnAll()
 {
     std::vector<std::unique_ptr<CKeyHolder>> tmp;
     {
-        // don't hold cs_storage while calling ReturnKey(), which might lock cs_wallet
+        // don't hold cs_storage while calling ReturnDestination(), which might lock cs_wallet
         LOCK(cs_storage);
         std::swap(storage, tmp);
     }
 
     if (tmp.size() > 0) {
         for (auto &key : tmp) {
-            key->ReturnKey();
+            key->ReturnDestination();
         }
         LogPrintf("CKeyHolderStorage::%s -- %lld keys returned\n", __func__, tmp.size());
     }

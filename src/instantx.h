@@ -261,7 +261,7 @@ private:
     bool fAttacked = false;
 
 public:
-    static const int SIGNATURES_REQUIRED        = 6;
+    static const int SIGNATURES_REQUIRED        = 6; // TODO MAYBE INCREASE
     static const int SIGNATURES_TOTAL           = 10;
 
     COutPointLock(const COutPoint& outpointIn) :

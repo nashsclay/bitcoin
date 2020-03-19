@@ -200,12 +200,12 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, const std::string& strComm
                 nValueOut += txout.nValue;
                 tx.vout.push_back(txout);
 
-                if(txout.scriptPubKey.size() != 25) {
+                if(txout.scriptPubKey.size() != 22) { // p2wpkh scriptpubkey size is 22 bytes instead of 25 for p2pkh
                     LogPrintf("DSVIN -- non-standard pubkey detected! scriptPubKey=%s\n", ScriptToAsmStr(txout.scriptPubKey));
                     PushStatus(pfrom, STATUS_REJECTED, ERR_NON_STANDARD_PUBKEY, connman);
                     return;
                 }
-                if(txout.scriptPubKey.IsPayToScriptHash()) {
+                if(txout.scriptPubKey.IsPayToScriptHash() || txout.scriptPubKey.IsUnspendable()) {
                     LogPrintf("DSVIN -- invalid script! scriptPubKey=%s\n", ScriptToAsmStr(txout.scriptPubKey));
                     PushStatus(pfrom, STATUS_REJECTED, ERR_INVALID_SCRIPT, connman);
                     return;

@@ -58,7 +58,7 @@ struct Params {
     int nGovernanceMinQuorum; // Min absolute vote count to trigger an action
     int nGovernanceFilterElements;
     int nMasternodeMinimumConfirmations;
-    int nMasternodeCollateral;
+    int64_t nMasternodeCollateral;
     int nLastPoWBlock;
     int nMandatoryUpgradeBlock;
     int nUpgradeBlockVersion;

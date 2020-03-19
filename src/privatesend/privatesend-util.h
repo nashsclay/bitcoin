@@ -11,13 +11,13 @@ class CKeyHolder
 {
 private:
     ReserveDestination reserveKey;
-    CPubKey pubKey;
+    CTxDestination dest;
 public:
     CKeyHolder(CWallet* pwalletIn);
     CKeyHolder(CKeyHolder&&) = default;
     CKeyHolder& operator=(CKeyHolder&&) = default;
-    void KeepKey();
-    void ReturnKey();
+    void KeepDestination();
+    void ReturnDestination();
 
     CScript GetScriptForDestination() const;
 
