@@ -201,8 +201,8 @@ public:
     void Stop() NO_THREAD_SAFETY_ANALYSIS;
 
     void Interrupt();
-    bool GetNetworkActive() const { return fNetworkActive; };
-    bool GetUseAddrmanOutgoing() const { return m_use_addrman_outgoing; };
+    bool GetNetworkActive() const { return fNetworkActive; }
+    bool GetUseAddrmanOutgoing() const { return m_use_addrman_outgoing; }
     void SetNetworkActive(bool active);
     void OpenNetworkConnection(const CAddress& addrConnect, bool fCountFailure, CSemaphoreGrant *grantOutbound = nullptr, const char *strDest = nullptr, bool fOneShot = false, bool fFeeler = false, bool manual_connection = false, bool block_relay_only = false, bool fConnectToMasternode = false);
     void OpenMasternodeConnection(const CAddress& addrConnect);
@@ -249,6 +249,40 @@ public:
     void PushMessage(CNode* pnode, CSerializedNetMsg&& msg);
 
     template<typename Condition, typename Callable>
+    bool ForEachNodeContinueIf(const Condition& cond, Callable&& func)
+    {
+        LOCK(cs_vNodes);
+        for (auto&& node : vNodes)
+            if (cond(node))
+                if(!func(node))
+                    return false;
+        return true;
+    }
+
+    template<typename Callable>
+    bool ForEachNodeContinueIf(Callable&& func)
+    {
+        return ForEachNodeContinueIf(FullyConnectedOnly, func);
+    }
+
+    template<typename Condition, typename Callable>
+    bool ForEachNodeContinueIf(const Condition& cond, Callable&& func) const
+    {
+        LOCK(cs_vNodes);
+        for (const auto& node : vNodes)
+            if (cond(node))
+                if(!func(node))
+                    return false;
+        return true;
+    }
+
+    template<typename Callable>
+    bool ForEachNodeContinueIf(Callable&& func) const
+    {
+        return ForEachNodeContinueIf(FullyConnectedOnly, func);
+    }
+
+    template<typename Condition, typename Callable>
     void ForEachNode(const Condition& cond, Callable&& func)
     {
         LOCK(cs_vNodes);
@@ -256,7 +290,7 @@ public:
             if (cond(node))
                 func(node);
         }
-    };
+    }
 
     template<typename Callable>
     void ForEachNode(Callable&& func)
@@ -272,7 +306,7 @@ public:
             if (cond(node))
                 func(node);
         }
-    };
+    }
 
     template<typename Callable>
     void ForEachNode(Callable&& func) const
@@ -289,7 +323,7 @@ public:
                 pre(node);
         }
         post();
-    };
+    }
 
     template<typename Callable, typename CallableAfter>
     void ForEachNodeThen(Callable&& pre, CallableAfter&& post) const
@@ -300,7 +334,7 @@ public:
                 pre(node);
         }
         post();
-    };
+    }
 
     std::vector<CNode*> CopyNodeVector(std::function<bool(const CNode* pnode)> cond);
     std::vector<CNode*> CopyNodeVector();

@@ -95,7 +95,7 @@ public:
 
     void ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStream& vRecv, CConnman& connman);
 
-    bool ProcessTxLockRequest(const CTxLockRequest& txLockRequest, CConnman& connman);
+    bool ProcessTxLockRequest(const CTxLockRequest& txLockRequest);
     void Vote(const uint256& txHash, CConnman& connman);
 
     bool AlreadyHave(const uint256& hash);
@@ -261,7 +261,7 @@ private:
     bool fAttacked = false;
 
 public:
-    static const int SIGNATURES_REQUIRED        = 6; // TODO MAYBE INCREASE
+    static const int SIGNATURES_REQUIRED        = 6; // TODO MAYBE INCREASE (10-15?)
     static const int SIGNATURES_TOTAL           = 10;
 
     COutPointLock(const COutPoint& outpointIn) :

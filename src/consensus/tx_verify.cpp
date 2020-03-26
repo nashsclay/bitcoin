@@ -156,6 +156,16 @@ int64_t GetTransactionSigOpCost(const CTransaction& tx, const CCoinsViewCache& i
     return nSigOps;
 }
 
+CAmount GetMinFee(const CTransaction& tx)
+{
+    int64_t nBytes = ::GetSerializeSize(tx, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS);
+    CAmount nMinFee = tx.nVersion < CTransaction::CURRENT_VERSION ? nBytes : nBytes * COIN / 1000; // DEFAULT_TRANSACTION_MINFEE / 1000;
+
+    if (!MoneyRange(nMinFee))
+        nMinFee = MAX_MONEY;
+    return nMinFee;
+}
+
 bool Consensus::CheckTxInputs(const CTransaction& tx, CValidationState& state, const CCoinsViewCache& inputs, int nSpendHeight, CAmount& txfee)
 {
     // are the actual inputs available?
@@ -195,6 +205,10 @@ bool Consensus::CheckTxInputs(const CTransaction& tx, CValidationState& state, c
         if (!MoneyRange(txfee_aux)) {
             return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-txns-fee-outofrange");
         }
+
+        // peercoin: enforce transaction fees for every block
+        if (txfee_aux < GetMinFee(tx))
+            return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-txns-fee-not-enough");
         txfee = txfee_aux;
     } else
         txfee = 0;

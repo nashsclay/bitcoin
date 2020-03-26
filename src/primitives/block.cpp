@@ -6,17 +6,36 @@
 #include <primitives/block.h>
 
 #include <hash.h>
+#include <streams.h>
 #include <tinyformat.h>
 #include <crypto/common.h>
+#include <crypto/scrypt.h>
 
 uint256 CBlockHeader::GetHash() const
 {
-    return SerializeHash(*this);
+    if (nVersion > 1)
+        return SerializeHash(*this);
+    else if (nVersion == 0) {
+        std::vector<unsigned char> vch(80); // block header size in bytes
+        CVectorWriter ss(SER_NETWORK, PROTOCOL_VERSION, vch, 0);
+        ss << *this;
+        uint256 thash;
+        scrypt_1024_1_1_256((const char*)vch.data(), (char*)&thash);
+        return thash;
+    } else {
+        std::vector<unsigned char> vch(80); // block header size in bytes
+        CVectorWriter ss(SER_NETWORK, PROTOCOL_VERSION, vch, 0);
+        ss << *this;
+        return HashQuark((const char*)vch.data(), (const char*)vch.data() + vch.size());
+    }
 }
 
 uint256 CBlockHeader::GetPoWHash() const
 {
-    return SerializeHash(*this);
+    std::vector<unsigned char> vch(80); // block header size in bytes
+    CVectorWriter ss(SER_NETWORK, PROTOCOL_VERSION, vch, 0);
+    ss << *this;
+    return HashQuark((const char*)vch.data(), (const char*)vch.data() + vch.size());
 }
 
 std::string CBlock::ToString() const

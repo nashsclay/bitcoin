@@ -2705,7 +2705,7 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
 
         // Process custom logic, no matter if tx will be accepted to mempool later or not
         if (strCommand == NetMsgType::TXLOCKREQUEST) {
-            if (!instantsend.ProcessTxLockRequest(txLockRequest, *connman)) {
+            if (!instantsend.ProcessTxLockRequest(txLockRequest)) {
                 LogPrint(BCLog::INSTANTSEND, "TXLOCKREQUEST -- failed %s\n", txLockRequest.GetHash().ToString());
                 return false;
             }

@@ -7,6 +7,8 @@
 
 #include <arith_uint256.h>
 #include <chain.h>
+#include <chainparams.h>
+//#include <logging.h>
 #include <primitives/block.h>
 #include <uint256.h>
 
@@ -84,8 +86,13 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params&
         return false;
 
     // Check proof of work matches claimed amount
-    if (UintToArith256(hash) > bnTarget)
-        return false;
+    if (UintToArith256(hash) > bnTarget) {
+        if (hash == Params().GetConsensus().hashGenesisBlock && Params().NetworkIDString() == CBaseChainParams::MAIN) {
+            //LogPrintf("%s: accepting genesis block %s\n", __func__, hash.ToString());
+            return true;
+        } else
+            return false;
+    }
 
     return true;
 }

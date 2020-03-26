@@ -62,7 +62,7 @@ static void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& 
         if (pindex) {
             if (::ChainActive().Contains(pindex)) {
                 entry.pushKV("confirmations", 1 + ::ChainActive().Height() - pindex->nHeight);
-                entry.pushKV("time", pindex->GetBlockTime());
+                entry.pushKV("time", tx.nTime ? tx.nTime : pindex->GetBlockTime());
                 entry.pushKV("blocktime", pindex->GetBlockTime());
             }
             else
@@ -159,7 +159,8 @@ static UniValue getrawtransaction(const JSONRPCRequest& request)
 
     if (hash == Params().GenesisBlock().hashMerkleRoot) {
         // Special exception for the genesis block coinbase transaction
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "The genesis block coinbase is not considered an ordinary transaction and cannot be retrieved");
+        //throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "The genesis block coinbase is not considered an ordinary transaction and cannot be retrieved");
+        blockindex = LookupBlockIndex(Params().GetConsensus().hashGenesisBlock);
     }
 
     // Accept either a bool (true) or a num (>=1) to indicate verbose output.

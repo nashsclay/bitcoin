@@ -2401,7 +2401,7 @@ bool CWalletTx::SubmitMemoryPoolAndRelay(std::string& err_string, bool relay, in
     uint256 hash = GetHash();
     pwallet->WalletLogPrintf("Submitting wtx %s to mempool for relay\n", hash.ToString());
     if (strCommand == NetMsgType::TXLOCKREQUEST) {
-        if (instantsend.ProcessTxLockRequest((CTxLockRequest)*this->tx, *pwallet->chain().m_node.connman)) {
+        if (instantsend.ProcessTxLockRequest((CTxLockRequest)*this->tx)) {
             instantsend.AcceptLockRequest((CTxLockRequest)*this->tx);
         } else {
             instantsend.RejectLockRequest((CTxLockRequest)*this->tx);
@@ -3377,8 +3377,9 @@ bool CWallet::SelectCoinsByDenominations(int nDenom, CAmount nValueMin, CAmount 
     vCoinsRet.clear();
     nValueRet = 0;
 
+    auto locked_chain = chain().lock();
     std::vector<COutput> vCoins;
-    AvailableCoins(vCoins, true, NULL, false, ONLY_DENOMINATED);
+    AvailableCoins(*locked_chain, vCoins, true, nullptr, 1, MAX_MONEY, MAX_MONEY, 0, ONLY_DENOMINATED);
 
     std::random_shuffle(vCoins.rbegin(), vCoins.rend(), GetRandInt);
 
@@ -3534,13 +3535,14 @@ bool CWallet::SelectCoinsGroupedByAddresses(std::vector<CompactTallyItem>& vecTa
 
 bool CWallet::SelectCoinsDark(CAmount nValueMin, CAmount nValueMax, std::vector<CTxIn>& vecTxInRet, CAmount& nValueRet, int nPrivateSendRoundsMin, int nPrivateSendRoundsMax) const
 {
-    CCoinControl *coinControl=NULL;
+    CCoinControl *coinControl=nullptr;
 
     vecTxInRet.clear();
     nValueRet = 0;
 
+    auto locked_chain = chain().lock();
     std::vector<COutput> vCoins;
-    AvailableCoins(vCoins, true, coinControl, false, nPrivateSendRoundsMin < 0 ? ONLY_NONDENOMINATED : ONLY_DENOMINATED);
+    AvailableCoins(*locked_chain, vCoins, true, coinControl, 1, MAX_MONEY, MAX_MONEY, 0, nPrivateSendRoundsMin < 0 ? ONLY_NONDENOMINATED : ONLY_DENOMINATED);
 
     //order the array so largest nondenom are first, then denominations, then very small inputs.
     std::sort(vCoins.rbegin(), vCoins.rend(), CompareByPriority());
@@ -3574,7 +3576,8 @@ bool CWallet::GetCollateralTxDSIn(CTxDSIn& txdsinRet, CAmount& nValueRet) const
 
     std::vector<COutput> vCoins;
 
-    AvailableCoins(vCoins);
+    auto locked_chain = chain().lock();
+    AvailableCoins(*locked_chain, vCoins);
 
     for (const auto& out : vCoins)
     {
@@ -3595,8 +3598,9 @@ bool CWallet::GetMasternodeOutpointAndKeys(COutPoint& outpointRet, CPubKey& pubK
     if (fImporting || fReindex) return false;
 
     // Find possible candidates
+    auto locked_chain = chain().lock();
     std::vector<COutput> vPossibleCoins;
-    AvailableCoins(vPossibleCoins, true, NULL, false, ONLY_MASTERNODE_COLLATERAL);
+    AvailableCoins(*locked_chain, vPossibleCoins, true, nullptr, 1, MAX_MONEY, MAX_MONEY, 0, ONLY_MASTERNODE_COLLATERAL);
     if (vPossibleCoins.empty()) {
         LogPrintf("CWallet::GetMasternodeOutpointAndKeys -- Could not locate any valid masternode vin\n");
         return false;
@@ -3659,7 +3663,7 @@ int CWallet::CountInputsWithAmount(CAmount nInputAmount)
                 int nDepth = pcoin->GetDepthInMainChain(*locked_chain, false);
 
                 for (unsigned int i = 0; i < pcoin->tx->vout.size(); i++) {
-                    COutput out = COutput(pcoin, i, nDepth, true, true);
+                    COutput out = COutput(pcoin, i, nDepth, true, true, true);
                     COutPoint outpoint = COutPoint(out.tx->GetHash(), out.i);
 
                     if (out.tx->tx->vout[out.i].nValue != nInputAmount) continue;
@@ -3677,8 +3681,9 @@ int CWallet::CountInputsWithAmount(CAmount nInputAmount)
 
 bool CWallet::HasCollateralInputs(bool fOnlyConfirmed) const
 {
+    auto locked_chain = chain().lock();
     std::vector<COutput> vCoins;
-    AvailableCoins(vCoins, fOnlyConfirmed, NULL, false, ONLY_PRIVATESEND_COLLATERAL);
+    AvailableCoins(*locked_chain, vCoins, fOnlyConfirmed, NULL, 1, MAX_MONEY, MAX_MONEY, 0, ONLY_PRIVATESEND_COLLATERAL);
 
     return !vCoins.empty();
 }
@@ -3719,7 +3724,8 @@ bool CWallet::CreateCollateralTransaction(CMutableTransaction& txCollateral, std
         txCollateral.vout.push_back(CTxOut(0, CScript() << OP_RETURN));
     }
 
-    if (!SignSignature(*this, txdsinCollateral.prevPubKey, txCollateral, 0)) {
+    const SigningProvider& keystore = *this;
+    if (!SignSignature(keystore, txdsinCollateral.prevPubKey, txCollateral, 0, nValue, SIGHASH_ALL)) {
         strReason = "Unable to sign collateral transaction!";
         return false;
     }
@@ -3729,18 +3735,8 @@ bool CWallet::CreateCollateralTransaction(CMutableTransaction& txCollateral, std
 
 bool CWallet::GetBudgetSystemCollateralTX(CTransactionRef& tx, uint256 hash, CAmount amount, bool fUseInstantSend)
 {
-    CWalletTx wtx;
-    if(GetBudgetSystemCollateralTX(wtx, hash, amount, fUseInstantSend)){
-        tx = wtx.tx;
-        return true;
-    }
-    return false;
-}
-
-bool CWallet::GetBudgetSystemCollateralTX(CWalletTx& tx, uint256 hash, CAmount amount, bool fUseInstantSend)
-{
     // make our change address
-    ReserveDestination reservekey(this);
+    //ReserveDestination reservekey(this);
 
     CScript scriptChange;
     scriptChange << OP_RETURN << ToByteVector(hash);
@@ -3751,8 +3747,9 @@ bool CWallet::GetBudgetSystemCollateralTX(CWalletTx& tx, uint256 hash, CAmount a
     std::vector< CRecipient > vecSend;
     vecSend.push_back((CRecipient){scriptChange, amount, false});
 
-    CCoinControl *coinControl=NULL;
-    bool success = CreateTransaction(vecSend, tx, reservekey, nFeeRet, nChangePosRet, strFail, coinControl, true, ALL_COINS, fUseInstantSend);
+    auto locked_chain = chain().lock();
+    CCoinControl coinControl;
+    bool success = CreateTransaction(*locked_chain, vecSend, tx, nFeeRet, nChangePosRet, strFail, coinControl, true, ALL_COINS, fUseInstantSend);
     if (!success) {
         LogPrintf("CWallet::GetBudgetSystemCollateralTX -- Error: %s\n", strFail);
         return false;

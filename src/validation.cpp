@@ -1298,25 +1298,50 @@ CAmount GetBlockSubsidy(int nHeight, bool fProofOfStake, uint64_t nCoinAge, cons
 {
     if (nHeight < 0) return 0;
 
-    CAmount nRewardCoinYear = 10 * CENT; // 10% interest
-    CAmount nRewardCoinYearOld = 22.38 * CENT; // 22.38% interest
     CAmount nSubsidy = 0;
+    CAmount nRewardCoinYear = COIN / 100; // this is 1% APR interest by default (compounded once per stake); for every 100 coins held for a year, the reward when staked should be 1 coin (rewards increase proportionally with larger money supply/more coins staking)
+    CAmount nMoneySupply = (nHeight > 0 && ::ChainActive().Tip()) ? (::ChainActive()[nHeight-1] ? ::ChainActive()[nHeight-1]->nMoneySupply : ::ChainActive().Tip()->nMoneySupply) : 0; // the previous block's money supply should probably be passed to this function instead of retrieving it here
 
     if (fProofOfStake) {
-        if (nCoinAge == uint64_t(0))
+        // lower nominal interest rates are actually fairer to small stakers because the effective rate increase from staking/compounding continuously becomes negligible (exp(0.01)-1 = 1.005% which is 0.005% more than the annual rate)
+        if (nHeight < 1450000) {
+            if (nHeight >= consensusParams.nMandatoryUpgradeBlock)
+                nRewardCoinYear *= 10; // 10% interest
+            else
+                nRewardCoinYear *= 22.38; // 22.38% interest
+        }
+
+        if (nCoinAge == 0)
             nSubsidy = nRewardCoinYear / 500;
-        else if (nHeight >= consensusParams.nMandatoryUpgradeBlock)
-            nSubsidy = nCoinAge * nRewardCoinYear / 365.25; // will be reduced
+        else if (nHeight >= consensusParams.nMandatoryUpgradeBlock && nHeight < 1450000)
+            nSubsidy = nCoinAge * nRewardCoinYear / 365.25;
         else
-            nSubsidy = nCoinAge * nRewardCoinYearOld * 33 / (365 * 33 + 8);
+            nSubsidy = nCoinAge * nRewardCoinYear * 33 / (365 * 33 + 8); // this is a more accurate approximation of the number of days in a year than 365.25, being equivalent to dividing by (365 + 8.0/33) or 365.24242424... (keep in mind the integer division)
     } else {
-        nSubsidy = 100 * COIN;
+        if (nHeight == 0)
+            nSubsidy = 0 * COIN;
+        else if (nHeight <= 200)
+            nSubsidy = 15000000 * COIN;
+        else if (nHeight <= 400)
+            nSubsidy = 0 * COIN;
+        else if (nHeight <= 2000)
+            nSubsidy = 500 * COIN;
+        else if (nHeight < 1030000)
+            nSubsidy = 100 * COIN;
+        else if (nHeight < 1450000)
+            nSubsidy = 10000 * COIN;
+        else {
+            CAmount nHalvingReward = 10000 * pow(2.0, -(nHeight-1450000.0) / 100000.0) * COIN; // exponentially decaying block rewards (reward halving every 100000 blocks)
+            // note we could be more accurate here by using the money supply from the same block height for a year to only compound once annually, but with large wallets staking/compounding multiple times per day, the effective annual rate at which nCoinAge is increasing is already close to continuous compounding
+            CAmount nSupplyReward = nMoneySupply / (10.0 * (365+8.0/33) * (24*60*60) / consensusParams.nPowTargetSpacing); // 10.0% APR continuously compounding inflation (effective APY of exp(0.1)-1 = 10.517%)
+
+            nSubsidy = std::max(nHalvingReward, nSupplyReward);
+        }
     }
 
-    if (nHeight > consensusParams.nMandatoryUpgradeBlock && nSubsidy > 10 * COIN) {
-        CAmount nMoneySupply = ::ChainActive()[nHeight-1] ? ::ChainActive()[nHeight-1]->nMoneySupply : ::ChainActive().Tip()->nMoneySupply;
-        if (nMoneySupply + nSubsidy > MAX_MONEY) // soft supply cap
-            nSubsidy = 10 * COIN;
+    if (nHeight >= consensusParams.nMandatoryUpgradeBlock && nSubsidy > 100 * COIN) {
+        if (nMoneySupply + nSubsidy > MAX_MONEY) // soft supply cap (this will essentially put us into static PoW/PoS rewards)
+            nSubsidy = 100 * COIN;
     }
 
     // 10% of reward goes to governance/treasury (90/100 goes to stakers and MNs)
@@ -1327,7 +1352,7 @@ CAmount GetBlockSubsidy(int nHeight, bool fProofOfStake, uint64_t nCoinAge, cons
 
 CAmount GetMasternodePayment(int nHeight, CAmount blockValue, bool fProofOfStake)
 {
-    CAmount ret = blockValue * 2 / 3; // Masternode receives 67% of block reward
+    CAmount ret = fProofOfStake ? blockValue * 2 / 3 : blockValue / 2; // Masternode receives 67% of PoS block reward
 
     return ret;
 }
@@ -3571,7 +3596,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
 
     // Check transactions
     // Must check for duplicate inputs (see CVE-2018-17144)
-    bool fEnforceNewTransactionVersion = block.nVersion >= consensusParams.nUpgradeBlockVersion;
+    bool fEnforceNewTransactionVersion = block.nVersion >= consensusParams.nUpgradeBlockVersion && block.GetHash() != consensusParams.hashGenesisBlock;
     for (const auto& tx : block.vtx) {
         if (!CheckTransaction(*tx, state, true))
             return state.Invalid(state.GetReason(), false, state.GetRejectCode(), state.GetRejectReason(),
@@ -3707,7 +3732,7 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
     }
 
     // Check timestamp against prev
-    if (block.GetBlockTime() <= pindexPrev->GetBlockTime()) //pindexPrev->GetMedianTimePast()
+    if (nHeight >= consensusParams.nMandatoryUpgradeBlock && block.GetBlockTime() <= pindexPrev->GetBlockTime()) //pindexPrev->GetMedianTimePast()
         return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "time-too-old", "block's timestamp is too early");
 
     // Check timestamp

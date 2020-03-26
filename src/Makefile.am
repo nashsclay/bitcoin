@@ -91,11 +91,11 @@ endif
 if BUILD_BITCOIN_TX
   bin_PROGRAMS += bitcoin-tx
 endif
-if ENABLE_WALLET
-if BUILD_BITCOIN_WALLET
-  bin_PROGRAMS += bitcoin-wallet
-endif
-endif
+#if ENABLE_WALLET
+#if BUILD_BITCOIN_WALLET
+#  bin_PROGRAMS += bitcoin-wallet # TODO
+#endif
+#endif
 
 .PHONY: FORCE check-symbols check-security
 # bitcoin core #
@@ -258,8 +258,8 @@ BITCOIN_CORE_H = \
   masternode/masternode.h \
   masternode/masternode-payments.h \
   masternode/masternode-sync.h \
-  masternode/masternodeman.h \
   masternode/masternodeconfig.h \
+  masternode/masternodeman.h \
   messagesigner.h \
   netfulfilledman.h \
   privatesend/privatesend.h \
@@ -337,6 +337,7 @@ libbitcoin_server_a_SOURCES = \
   governance/governance-vote.cpp \
   governance/governance-votedb.cpp \
   instantx.cpp \
+  masternode/activemasternode.cpp \
   masternode/masternode.cpp \
   masternode/masternode-payments.cpp \
   masternode/masternode-sync.cpp \
@@ -351,7 +352,7 @@ libbitcoin_server_a_SOURCES = \
   $(BITCOIN_CORE_H)
 
 if ENABLE_WALLET
-libbitcoin_server_a_SOURCES += wallet/init.cpp
+libbitcoin_server_a_SOURCES += wallet/init.cpp privatesend/privatesend-client.cpp privatesend/privatesend-util.cpp
 endif
 if !ENABLE_WALLET
 libbitcoin_server_a_SOURCES += dummywallet.cpp
@@ -388,8 +389,6 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/walletdb.cpp \
   wallet/walletutil.cpp \
   wallet/coinselection.cpp \
-  privatesend/privatesend-client.cpp \
-  privatesend/privatesend-util.cpp \
   $(BITCOIN_CORE_H)
 
 libbitcoin_wallet_tool_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
@@ -426,7 +425,25 @@ crypto_libbitcoin_crypto_base_a_SOURCES = \
   crypto/sha512.cpp \
   crypto/sha512.h \
   crypto/siphash.cpp \
-  crypto/siphash.h
+  crypto/siphash.h \
+## --- scrypt hash --- ##
+  crypto/scrypt.cpp \
+  crypto/scrypt-sse2.cpp \
+  crypto/scrypt.h \
+## --- quark hash --- ##
+  crypto/blake.c \
+  crypto/sph_blake.h \
+  crypto/bmw.c \
+  crypto/sph_bmw.h \
+  crypto/groestl.c \
+  crypto/sph_groestl.h \
+  crypto/jh.c \
+  crypto/sph_jh.h \
+  crypto/keccak.c \
+  crypto/sph_keccak.h \
+  crypto/skein.c \
+  crypto/sph_skein.h \
+  crypto/sph_types.h
 
 if USE_ASM
 crypto_libbitcoin_crypto_base_a_SOURCES += crypto/sha256_sse4.cpp
@@ -678,7 +695,7 @@ if GLIBC_BACK_COMPAT
 endif
 
 libbitcoinconsensus_la_LDFLAGS = $(AM_LDFLAGS) -no-undefined $(RELDFLAGS)
-libbitcoinconsensus_la_LIBADD = $(LIBSECP256K1)
+libbitcoinconsensus_la_LIBADD = $(LIBSECP256K1) $(CRYPTO_LIBS)
 libbitcoinconsensus_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(builddir)/obj -I$(srcdir)/secp256k1/include -DBUILD_BITCOIN_INTERNAL
 libbitcoinconsensus_la_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
