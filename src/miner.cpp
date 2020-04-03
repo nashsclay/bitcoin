@@ -141,13 +141,23 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     int nDescendantsUpdated = 0;
     addPackageTxs(nPackagesSelected, nDescendantsUpdated);
 
-    if (fIncludeWitness) {
+    //if (nHeight >= consensusParams.nMandatoryUpgradeBlock[1]) {
         // Ensure that transactions are canonically ordered
         std::sort(std::begin(pblocktemplate->entries) + (pblock->IsProofOfStake()?2:1),
                   std::end(pblocktemplate->entries),
                   [](const CBlockTemplateEntry &a, const CBlockTemplateEntry &b)
-                      -> bool { return a.tx->GetWitnessHash() < b.tx->GetWitnessHash(); });
-    }
+                      -> bool {
+                          const uint256 &txbHash = b.tx->GetHash();
+                          bool txbIsInput = false;
+                          for (const CTxIn &vin : a.tx->vin) {
+                              if (vin.prevout.hash == txbHash) {
+                                  txbIsInput = true; // one of a.tx's inputs is b.tx, so we cannot put a.tx before b.tx in the block (topological order must be kept)
+                                  break;
+                              }
+                          }
+                          return !txbIsInput && a.tx->GetWitnessHash() < b.tx->GetWitnessHash();
+                      });
+    //}
 
     // Copy all the transactions refs into the block
     pblock->vtx.reserve(pblocktemplate->entries.size());

@@ -446,6 +446,120 @@ static UniValue sendtoaddress(const JSONRPCRequest& request)
     return tx->GetHash().GetHex();
 }
 
+static UniValue burncoins(const JSONRPCRequest& request)
+{
+    std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
+    CWallet* const pwallet = wallet.get();
+
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) {
+        return NullUniValue;
+    }
+
+            RPCHelpMan{"burncoins",
+                "\nBurn an amount of coins." +
+                    HelpRequiringPassphrase(pwallet) + "\n",
+                {
+                    {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The amount in " + CURRENCY_UNIT + " to burn. eg 0.1"},
+                    {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED_NAMED_ARG, "A comment embedded in the transaction on the blockchain.\n"
+            "                             This is part of the transaction."},
+                    {"subtractfeefromamount", RPCArg::Type::BOOL, /* default */ "false", "The fee will be deducted from the amount being sent.\n"
+            "                             The amount burned may be fewer coins than you enter in the amount field."},
+                    {"replaceable", RPCArg::Type::BOOL, /* default */ "wallet default", "Allow this transaction to be replaced by a transaction with higher fees via BIP 125"},
+                    {"conf_target", RPCArg::Type::NUM, /* default */ "wallet default", "Confirmation target (in blocks)"},
+                    {"estimate_mode", RPCArg::Type::STR, /* default */ "UNSET", "The fee estimate mode, must be one of:\n"
+            "       \"UNSET\"\n"
+            "       \"ECONOMICAL\"\n"
+            "       \"CONSERVATIVE\""},
+                    {"avoid_reuse", RPCArg::Type::BOOL, /* default */ "true", "(only available if avoid_reuse wallet flag is set) Avoid spending from dirty addresses; addresses are considered\n"
+            "                             dirty if they have previously been used in a transaction."},
+                },
+                RPCResult{
+            "\"txid\"                  (string) The transaction id.\n"
+                },
+                RPCExamples{
+                    HelpExampleCli("burncoins", "0.1")
+            + HelpExampleCli("burncoins", "0.1 \"Hello world!\"")
+            + HelpExampleCli("burncoins", "0.1 \"\" true")
+            + HelpExampleRpc("burncoins", "0.1, \"Hello world!\"")
+                },
+            }.Check(request);
+
+    // Make sure the results are valid at least up to the most recent block
+    // the user could have gotten from another RPC command prior to now
+    pwallet->BlockUntilSyncedToCurrentChain();
+
+    auto locked_chain = pwallet->chain().lock();
+    LOCK(pwallet->cs_wallet);
+
+    // Amount
+    CAmount nAmount = AmountFromValue(request.params[0]);
+    if (nAmount <= 0)
+        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount to burn");
+
+    // Comment
+    CScript burnScript = CScript() << OP_RETURN;
+    if (!request.params[1].isNull() && !request.params[1].get_str().empty()) {
+        // We can only support a string of up to 255 characters here instead of 256 (MAX_OP_RETURN_RELAY-3) because an extra length byte would be added by OP_PUSHDATA2, pushing us over the data carrier 259 byte limit by one
+        if (request.params[1].get_str().length() > MAX_OP_RETURN_RELAY - 4)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Comment cannot be longer than %u characters", MAX_OP_RETURN_RELAY - 4));
+        burnScript << ToByteVector(request.params[1].get_str());
+    }
+
+    bool fSubtractFeeFromAmount = false;
+    if (!request.params[2].isNull()) {
+        fSubtractFeeFromAmount = request.params[2].get_bool();
+    }
+
+    CCoinControl coin_control;
+    if (!request.params[3].isNull()) {
+        coin_control.m_signal_bip125_rbf = request.params[3].get_bool();
+    }
+
+    if (!request.params[4].isNull()) {
+        coin_control.m_confirm_target = ParseConfirmTarget(request.params[4], pwallet->chain().estimateMaxBlocks());
+    }
+
+    if (!request.params[5].isNull()) {
+        if (!FeeModeFromString(request.params[5].get_str(), coin_control.m_fee_mode)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid estimate_mode parameter");
+        }
+    }
+
+    coin_control.m_avoid_address_reuse = GetAvoidReuseFlag(pwallet, request.params[6]);
+    // We also enable partial spend avoidance if reuse avoidance is set.
+    coin_control.m_avoid_partial_spends |= coin_control.m_avoid_address_reuse;
+
+    EnsureWalletIsUnlocked(pwallet);
+
+    CAmount curBalance = pwallet->GetBalance(0, coin_control.m_avoid_address_reuse).m_mine_trusted;
+
+    // Check amount
+    if (nAmount > curBalance)
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
+
+    // Create and send the transaction
+    CAmount nFeeRequired;
+    std::string strError;
+    std::vector<CRecipient> vecSend;
+    int nChangePosRet = -1;
+    CRecipient recipient = {burnScript, nAmount, fSubtractFeeFromAmount};
+    vecSend.push_back(recipient);
+    CTransactionRef tx;
+    if (!pwallet->CreateTransaction(*locked_chain, vecSend, tx, nFeeRequired, nChangePosRet, strError, coin_control)) {
+        if (!fSubtractFeeFromAmount && nAmount + nFeeRequired > curBalance)
+            strError = strprintf("Error: This transaction requires a transaction fee of at least %s", FormatMoney(nFeeRequired));
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    }
+    mapValue_t mapValue;
+    CValidationState state;
+    if (!pwallet->CommitTransaction(tx, std::move(mapValue), {} /* orderForm */, state)) {
+        strError = strprintf("Error: The transaction was rejected! Reason given: %s", FormatStateMessage(state));
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    }
+
+    return tx->GetHash().GetHex();
+}
+
 static UniValue listaddressgroupings(const JSONRPCRequest& request)
 {
     std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
@@ -4232,6 +4346,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "rescanblockchain",                 &rescanblockchain,              {"start_height", "stop_height"} },
     { "wallet",             "sendmany",                         &sendmany,                      {"dummy","amounts","minconf","comment","subtractfeefrom","replaceable","conf_target","estimate_mode"} },
     { "wallet",             "sendtoaddress",                    &sendtoaddress,                 {"address","amount","comment","comment_to","subtractfeefromamount","replaceable","conf_target","estimate_mode","avoid_reuse"} },
+    { "wallet",             "burncoins",                        &burncoins,                     {"amount","comment","subtractfeefromamount","replaceable","conf_target","estimate_mode","avoid_reuse"} },
     { "wallet",             "sethdseed",                        &sethdseed,                     {"newkeypool","seed"} },
     { "wallet",             "setlabel",                         &setlabel,                      {"address","label"} },
     { "wallet",             "settxfee",                         &settxfee,                      {"amount"} },

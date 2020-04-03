@@ -178,7 +178,7 @@ public:
     uint32_t nStatus;
 
     //! block header
-    int32_t nVersion;
+    uint32_t nVersion;
     uint256 hashMerkleRoot;
     uint32_t nTime;
     uint32_t nBits;

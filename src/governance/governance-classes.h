@@ -106,7 +106,7 @@ public:
         //{
             script = GetScriptForDestination(destIn);
             nAmount = nAmountIn;
-            fValid = true; //IsValidDestination(destIn);
+            fValid = IsValidDestination(destIn) && script != CScript();
         //}
         /*catch(std::exception& e)
         {

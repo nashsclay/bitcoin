@@ -325,12 +325,14 @@ CPubKey CWallet::GenerateNewKey(WalletBatch &batch, bool internal)
 
 void CWallet::DeriveNewChildKey(WalletBatch &batch, CKeyMetadata& metadata, CKey& secret, bool internal)
 {
-    // for now we use a fixed keypath scheme of m/0'/0'/k
+    // Use BIP44 keypath scheme i.e. m / purpose' / coin_type' / account' / change / address_index
     CKey seed;                     //seed (256bit)
     CExtKey masterKey;             //hd master key
-    CExtKey accountKey;            //key at m/0'
-    CExtKey chainChildKey;         //key at m/0'/0' (external) or m/0'/1' (internal)
-    CExtKey childKey;              //key at m/0'/0'/<n>'
+    CExtKey purposeKey;            //key at m/purpose' (check BIP44, BIP49, and BIP84 for alternate purpose)
+    CExtKey cointypeKey;           //key at m/purpose'/coin_type'
+    CExtKey accountKey;            //key at m/purpose'/coin_type'/account'
+    CExtKey changeKey;             //key at m/purpose'/coin_type'/account'/change (m/44'/coin_type'/0'/0 (external) or m/44'/coin_type'/0'/1 (internal))
+    CExtKey childKey;              //key at m/purpose'/coin_type'/account'/change/address_index
 
     // try to get the seed
     if (!GetKey(hdChain.seed_id, seed))
@@ -338,33 +340,44 @@ void CWallet::DeriveNewChildKey(WalletBatch &batch, CKeyMetadata& metadata, CKey
 
     masterKey.SetSeed(seed.begin(), seed.size());
 
-    // derive m/0'
+    // derive m/purpose'
     // use hardened derivation (child keys >= 0x80000000 are hardened after bip32)
-    masterKey.Derive(accountKey, BIP32_HARDENED_KEY_LIMIT);
+    masterKey.Derive(purposeKey, 44 | BIP32_HARDENED_KEY_LIMIT);
 
-    // derive m/0'/0' (external chain) OR m/0'/1' (internal chain)
+    // derive m/purpose'/coin_type'
+    purposeKey.Derive(cointypeKey, Params().ExtCoinType() | BIP32_HARDENED_KEY_LIMIT);
+
+    // derive m/purpose'/coin_type'/account'
+    int nAccountIndex = 0; // TODO
+    cointypeKey.Derive(accountKey, nAccountIndex | BIP32_HARDENED_KEY_LIMIT);
+
+    // derive m/purpose'/coin_type'/account'/change (m/44'/coin_type'/0'/0 (external chain) OR m/44'/coin_type'/0'/1 (internal chain))
     assert(internal ? CanSupportFeature(FEATURE_HD_SPLIT) : true);
-    accountKey.Derive(chainChildKey, BIP32_HARDENED_KEY_LIMIT+(internal ? 1 : 0));
+    accountKey.Derive(changeKey, /*BIP32_HARDENED_KEY_LIMIT+*/(internal ? 1 : 0));
 
     // derive child key at next index, skip keys already known to the wallet
     do {
-        // always derive hardened keys
+        // always derive hardened keys unless using BIP44 derivation
         // childIndex | BIP32_HARDENED_KEY_LIMIT = derive childIndex in hardened child-index-range
         // example: 1 | BIP32_HARDENED_KEY_LIMIT == 0x80000001 == 2147483649
         if (internal) {
-            chainChildKey.Derive(childKey, hdChain.nInternalChainCounter | BIP32_HARDENED_KEY_LIMIT);
-            metadata.hdKeypath = "m/0'/1'/" + std::to_string(hdChain.nInternalChainCounter) + "'";
-            metadata.key_origin.path.push_back(0 | BIP32_HARDENED_KEY_LIMIT);
-            metadata.key_origin.path.push_back(1 | BIP32_HARDENED_KEY_LIMIT);
-            metadata.key_origin.path.push_back(hdChain.nInternalChainCounter | BIP32_HARDENED_KEY_LIMIT);
+            changeKey.Derive(childKey, hdChain.nInternalChainCounter /*| BIP32_HARDENED_KEY_LIMIT*/);
+            metadata.hdKeypath = "m/44'/" + std::to_string(Params().ExtCoinType()) + "'/" + std::to_string(nAccountIndex) + "'/1/" + std::to_string(hdChain.nInternalChainCounter);
+            metadata.key_origin.path.push_back(44 | BIP32_HARDENED_KEY_LIMIT);
+            metadata.key_origin.path.push_back(Params().ExtCoinType() | BIP32_HARDENED_KEY_LIMIT);
+            metadata.key_origin.path.push_back(nAccountIndex | BIP32_HARDENED_KEY_LIMIT);
+            metadata.key_origin.path.push_back(1 /*| BIP32_HARDENED_KEY_LIMIT*/);
+            metadata.key_origin.path.push_back(hdChain.nInternalChainCounter /*| BIP32_HARDENED_KEY_LIMIT*/);
             hdChain.nInternalChainCounter++;
         }
         else {
-            chainChildKey.Derive(childKey, hdChain.nExternalChainCounter | BIP32_HARDENED_KEY_LIMIT);
-            metadata.hdKeypath = "m/0'/0'/" + std::to_string(hdChain.nExternalChainCounter) + "'";
-            metadata.key_origin.path.push_back(0 | BIP32_HARDENED_KEY_LIMIT);
-            metadata.key_origin.path.push_back(0 | BIP32_HARDENED_KEY_LIMIT);
-            metadata.key_origin.path.push_back(hdChain.nExternalChainCounter | BIP32_HARDENED_KEY_LIMIT);
+            changeKey.Derive(childKey, hdChain.nExternalChainCounter /*| BIP32_HARDENED_KEY_LIMIT*/);
+            metadata.hdKeypath = "m/44'/" + std::to_string(Params().ExtCoinType()) + "'/" + std::to_string(nAccountIndex) + "'/0/" + std::to_string(hdChain.nExternalChainCounter);
+            metadata.key_origin.path.push_back(44 | BIP32_HARDENED_KEY_LIMIT);
+            metadata.key_origin.path.push_back(Params().ExtCoinType() | BIP32_HARDENED_KEY_LIMIT);
+            metadata.key_origin.path.push_back(nAccountIndex | BIP32_HARDENED_KEY_LIMIT);
+            metadata.key_origin.path.push_back(0 /*| BIP32_HARDENED_KEY_LIMIT*/);
+            metadata.key_origin.path.push_back(hdChain.nExternalChainCounter /*| BIP32_HARDENED_KEY_LIMIT*/);
             hdChain.nExternalChainCounter++;
         }
     } while (HaveKey(childKey.key.GetPubKey().GetID()));
@@ -3010,7 +3023,7 @@ void CWallet::AvailableCoins(interfaces::Chain::Lock& locked_chain, std::vector<
                     continue; // do not use collateral amounts
                 found = !CPrivateSend::IsDenominatedAmount(wtx.tx->vout[i].nValue);
             } else if (nCoinType == ONLY_MASTERNODE_COLLATERAL) {
-                found = wtx.tx->vout[i].nValue == consensusParams.nMasternodeCollateral;
+                found = wtx.tx->vout[i].nValue == consensusParams.nMasternodeCollateral[2];
             } else if (nCoinType == ONLY_PRIVATESEND_COLLATERAL) {
                 found = CPrivateSend::IsCollateralAmount(wtx.tx->vout[i].nValue);
             } else {
@@ -3401,7 +3414,7 @@ bool CWallet::SelectCoinsByDenominations(int nDenom, CAmount nValueMin, CAmount 
     for (const auto& out : vCoins)
     {
         // masternode-like input should not be selected by AvailableCoins now anyway
-        //if(out.tx->vout[out.i].nValue == Params().GetConsensus().nMasternodeCollateral) continue;
+        //if(out.tx->vout[out.i].nValue == Params().GetConsensus().nMasternodeCollateral[2]) continue;
         if (nValueRet + out.tx->tx->vout[out.i].nValue <= nValueMax){
 
             CTxIn txin = CTxIn(out.tx->GetHash(), out.i);
@@ -3486,7 +3499,7 @@ bool CWallet::SelectCoinsGroupedByAddresses(std::vector<CompactTallyItem>& vecTa
             if (fAnonymizable) {
                 // ignore collaterals
                 if(CPrivateSend::IsCollateralAmount(wtx.tx->vout[i].nValue)) continue;
-                if(fMasternodeMode && wtx.tx->vout[i].nValue == Params().GetConsensus().nMasternodeCollateral) continue;
+                if(fMasternodeMode && wtx.tx->vout[i].nValue == Params().GetConsensus().nMasternodeCollateral[2]) continue;
                 // ignore outputs that are 10 times smaller then the smallest denomination
                 // otherwise they will just lead to higher fee / lower priority
                 if(wtx.tx->vout[i].nValue <= nSmallestDenom/10) continue;
@@ -3553,7 +3566,7 @@ bool CWallet::SelectCoinsDark(CAmount nValueMin, CAmount nValueMax, std::vector<
         if (out.tx->tx->vout[out.i].nValue < nValueMin/10) continue;
         //do not allow collaterals to be selected
         if (CPrivateSend::IsCollateralAmount(out.tx->tx->vout[out.i].nValue)) continue;
-        if (fMasternodeMode && out.tx->tx->vout[out.i].nValue == Params().GetConsensus().nMasternodeCollateral) continue; //masternode input
+        if (fMasternodeMode && out.tx->tx->vout[out.i].nValue == Params().GetConsensus().nMasternodeCollateral[2]) continue; //masternode input
 
         if (nValueRet + out.tx->tx->vout[out.i].nValue <= nValueMax){
             CTxIn txin = CTxIn(out.tx->GetHash(),out.i);

@@ -123,7 +123,7 @@ void WalletModel::updateWatchOnlyFlag(bool fHaveWatchonly)
 
 bool WalletModel::validateAddress(const QString &address)
 {
-    return IsValidDestinationString(address.toStdString());
+    return address.startsWith("burn", Qt::CaseInsensitive) || IsValidDestinationString(address.toStdString());
 }
 
 WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransaction &transaction, const CCoinControl& coinControl)
@@ -172,18 +172,28 @@ WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransact
         else
 #endif
         {   // User-entered bitcoin address / amount:
-            if(!validateAddress(rcp.address))
+            CScript scriptPubKey = CScript();
+            if (rcp.address.startsWith("burn", Qt::CaseInsensitive))
+            {
+                QString payload = rcp.address;
+                payload.remove(0, 4);
+                scriptPubKey << OP_RETURN;
+                if (payload.length() > 0)
+                    scriptPubKey << ToByteVector(payload.toStdString());
+            } else if (!validateAddress(rcp.address))
             {
                 return InvalidAddress;
+            } else
+            {
+                scriptPubKey = GetScriptForDestination(DecodeDestination(rcp.address.toStdString()));
             }
-            if(rcp.amount <= 0)
+            if (rcp.amount <= 0)
             {
                 return InvalidAmount;
             }
             setAddress.insert(rcp.address);
             ++nAddresses;
 
-            CScript scriptPubKey = GetScriptForDestination(DecodeDestination(rcp.address.toStdString()));
             CRecipient recipient = {scriptPubKey, rcp.amount, rcp.fSubtractFeeFromAmount};
             vecSend.push_back(recipient);
 

@@ -7,8 +7,8 @@
 #define PEERCOIN_KERNEL_H
 
 #include <arith_uint256.h>
-#include <streams.h>
 #include <primitives/transaction.h> // CTransaction(Ref)
+#include <streams.h>
 
 class CBlockIndex;
 class CValidationState;
@@ -43,7 +43,7 @@ bool CheckCoinStakeTimestamp(int64_t nTimeBlock, int64_t nTimeTx);
 // Check stake modifier hard checkpoints
 bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierChecksum);
 
-bool IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned int nRequired, unsigned int nToCheck);
+bool IsSuperMajority(unsigned int minVersion, const CBlockIndex* pstart, unsigned int nRequired, unsigned int nToCheck);
 
 // peercoin: entropy bit for stake modifier if chosen by modifier
 unsigned int GetStakeEntropyBit(const CBlock& block);

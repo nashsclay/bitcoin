@@ -58,10 +58,12 @@ struct Params {
     int nGovernanceMinQuorum; // Min absolute vote count to trigger an action
     int nGovernanceFilterElements;
     int nMasternodeMinimumConfirmations;
-    int64_t nMasternodeCollateral;
+    int64_t nMasternodeCollateral[3];
     int nLastPoWBlock;
-    int nMandatoryUpgradeBlock;
-    int nUpgradeBlockVersion;
+    int nMandatoryUpgradeBlock[2];
+    uint32_t nUpgradeBlockVersion[2];
+    uint32_t nBadScryptDiffStartTime;
+    uint32_t nBadScryptDiffEndTime;
     /* Block hash that is excepted from BIP16 enforcement */
     uint256 BIP16Exception;
     /** Block height and hash at which BIP34 becomes active */
@@ -100,6 +102,7 @@ struct Params {
 
     /** peercoin stuff */
     int64_t nStakeTargetSpacing;
+    int64_t nStakeMinDepth;
     int64_t nStakeMinAge;
     int64_t nStakeMaxAge;
     int64_t nModifierInterval;

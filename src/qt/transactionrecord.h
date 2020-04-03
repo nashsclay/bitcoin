@@ -85,7 +85,7 @@ public:
     };
 
     /** Number of confirmation recommended for accepting a transaction */
-    static const int RecommendedNumConfirmations = 6;
+    static const int RecommendedNumConfirmations = 10; // change this when adjusting target spacing and other chainparams - was COINBASE_MATURITY * 6 / 100 in bitcoin
 
     TransactionRecord():
             hash(), time(0), type(Other), address(""), debit(0), credit(0), idx(0)
