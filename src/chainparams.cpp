@@ -54,7 +54,7 @@ static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesi
             break;
         }
         genesis.nNonce += 1;
-        if ((genesis.nNonce & 0xffff) == 0xffff)
+        if ((genesis.nNonce & 0xffff) == 0)
             printf("testing nonce: %u\n", genesis.nNonce);
     }*/
     uint256 hash = genesis.GetPoWHash();
@@ -103,6 +103,7 @@ public:
         consensus.nMasternodeCollateral[0] = 100000 * COIN; // was 200000 * COIN
         consensus.nMasternodeCollateral[1] = 1000000 * COIN;
         consensus.nMasternodeCollateral[2] = 10000000 * COIN;
+        consensus.nPoSStartBlock = 0;
         consensus.nLastPoWBlock = NEVER;
         consensus.nMandatoryUpgradeBlock[0] = 1030000;
         consensus.nMandatoryUpgradeBlock[1] = 1450000;
@@ -118,14 +119,17 @@ public:
         consensus.CSVHeight = 1; // 63740505e585d80da6d612d0ddbdaec3b3eebd86c1c7447ebeebe13841a7efdd
         consensus.SegwitHeight = 0; // f4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf
         consensus.MinBIP9WarningHeight = 0; // segwit activation height + miner confirmation window
-        consensus.powLimit = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit[0] = uint256S("00000fffff000000000000000000000000000000000000000000000000000000"); // PoS limit
+        consensus.powLimit[1] = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000"); // 0x1f00ffff
         consensus.nPowTargetTimespan = 1 * 24 * 60 * 60; // one day
-        consensus.nStakeTargetSpacing = 80; // 80-second block spacing
-        consensus.nPowTargetSpacing = consensus.nStakeTargetSpacing;
-        consensus.nStakeMinDepth = 600;
-        consensus.nStakeMinAge = 12 * 60 * 60; // minimum age for coin age
+        consensus.nPowTargetSpacing = 80; // 80-second block spacing
+        consensus.nStakeTimestampMask = 0xf; // 16 second time slots - normally, more than this wouldn't work with an 80 second block time because 80 isn't divisible by 32, but the effective PoS target spacing is 160 seconds due to hybrid PoW/PoS
+        consensus.nStakeMinDepth[0] = 200;
+        consensus.nStakeMinDepth[1] = 600;
+        consensus.nStakeMinAge[0] = 2 * 60 * 60; // previous min age was 2 hours
+        consensus.nStakeMinAge[1] = 12 * 60 * 60; // current minimum age for coin age is 12 hours
         consensus.nStakeMaxAge = 30 * 24 * 60 * 60;
-        consensus.nModifierInterval = 30; // Modifier interval: time to elapse before new modifier is computed
+        consensus.nModifierInterval = 1 * 60; // Modifier interval: time to elapse before new modifier is computed
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.fPowNoRetargeting = false;
         consensus.nRuleChangeActivationThreshold = 1916; // 95% of 2016
@@ -138,7 +142,7 @@ public:
         consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000000000000000000000");
 
         // By default assume that the signatures in ancestors of this block are valid.
-        consensus.defaultAssumeValid = uint256S("0x0000000000000000000000000000000000000000000000000000000000000000"); // 597379
+        consensus.defaultAssumeValid = uint256S("0x0000000000000000000000000000000000000000000000000000000000000000"); // 1110000
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -154,7 +158,7 @@ public:
         m_assumed_blockchain_size = 5;
         m_assumed_chain_state_size = 1;
 
-        genesis = CreateGenesisBlock(1517690700, 561379, 0x1f00ffff, 1, 0 * COIN);
+        genesis = CreateGenesisBlock(1517690700, 561379, UintToArith256(consensus.powLimit[1]).GetCompact(), 1, 0 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
         //printf("Merkle hash mainnet: %s\n", genesis.hashMerkleRoot.ToString().c_str());
         //printf("Genesis hash mainnet: %s\n", consensus.hashGenesisBlock.ToString().c_str());
@@ -245,6 +249,7 @@ public:
         consensus.nMasternodeCollateral[0] = 10000 * COIN;
         consensus.nMasternodeCollateral[1] = 100000 * COIN;
         consensus.nMasternodeCollateral[2] = 1000000 * COIN;
+        consensus.nPoSStartBlock = 0;
         consensus.nLastPoWBlock = NEVER;
         consensus.nMandatoryUpgradeBlock[0] = 0;
         consensus.nMandatoryUpgradeBlock[1] = 0;
@@ -260,14 +265,17 @@ public:
         consensus.CSVHeight = 1; // 000037a145d6812571b0c413d868a43146d7159056afe7a06b344e9ee0de39fc
         consensus.SegwitHeight = 0; // 16e0228f2712c94c10ec590a98a416a664bdf42ebd10a6ffe563d817ee19b6b9
         consensus.MinBIP9WarningHeight = 0; // segwit activation height + miner confirmation window
-        consensus.powLimit = uint256S("000000ffff000000000000000000000000000000000000000000000000000000"); // uint256S("00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        consensus.powLimit[0] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000"); // PoS limit
+        consensus.powLimit[1] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000"); // uint256S("00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 1 * 24 * 60 * 60; // one day
-        consensus.nStakeTargetSpacing = 80; // 80-second block spacing
-        consensus.nPowTargetSpacing = consensus.nStakeTargetSpacing;
-        consensus.nStakeMinDepth = 100;
-        consensus.nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
+        consensus.nPowTargetSpacing = 64; // 64-second block spacing
+        consensus.nStakeTimestampMask = 0xf; // 16 second time slots
+        consensus.nStakeMinDepth[0] = 100;
+        consensus.nStakeMinDepth[1] = 100;
+        consensus.nStakeMinAge[0] = 1 * 60 * 60;
+        consensus.nStakeMinAge[1] = 1 * 60 * 60; // test net min age is 1 hour
         consensus.nStakeMaxAge = 30 * 24 * 60 * 60;
-        consensus.nModifierInterval = 30; // Modifier interval: time to elapse before new modifier is computed
+        consensus.nModifierInterval = 1 * 60; // Modifier interval: time to elapse before new modifier is computed
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.fPowNoRetargeting = false;
         consensus.nRuleChangeActivationThreshold = 1512; // 75% for testchains
@@ -291,7 +299,7 @@ public:
         m_assumed_blockchain_size = 5;
         m_assumed_chain_state_size = 1;
 
-        genesis = CreateGenesisBlock(1574924400, 2961, UintToArith256(consensus.powLimit).GetCompact(), 2<<29, 10000 * COIN);
+        genesis = CreateGenesisBlock(1574924400, 2961, UintToArith256(consensus.powLimit[1]).GetCompact(), 2<<29, 10000 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
         //printf("Merkle hash testnet: %s\n", genesis.hashMerkleRoot.ToString().c_str());
         //printf("Genesis hash testnet: %s\n", consensus.hashGenesisBlock.ToString().c_str());
@@ -364,6 +372,7 @@ public:
         consensus.nMasternodeCollateral[0] = 100 * COIN;
         consensus.nMasternodeCollateral[1] = 1000 * COIN;
         consensus.nMasternodeCollateral[2] = 10000 * COIN;
+        consensus.nPoSStartBlock = 0;
         consensus.nLastPoWBlock = NEVER;
         consensus.nMandatoryUpgradeBlock[0] = 0;
         consensus.nMandatoryUpgradeBlock[1] = 0;
@@ -379,14 +388,17 @@ public:
         consensus.CSVHeight = 432; // CSV activated on regtest (Used in rpc activation tests)
         consensus.SegwitHeight = 0; // SEGWIT is always activated on regtest unless overridden
         consensus.MinBIP9WarningHeight = 0;
-        consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
-        consensus.nStakeTargetSpacing = 10 * 60; // 10-minute block spacing
-        consensus.nPowTargetSpacing = consensus.nStakeTargetSpacing;
-        consensus.nStakeMinDepth = 0;
-        consensus.nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
+        consensus.powLimit[0] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit[1] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
+        consensus.nPowTargetTimespan = 1 * 24 * 60 * 60; // one day
+        consensus.nPowTargetSpacing = 32; // 32-second block spacing
+        consensus.nStakeTimestampMask = 0x3; // 4 second time slots
+        consensus.nStakeMinDepth[0] = 0;
+        consensus.nStakeMinDepth[1] = 0;
+        consensus.nStakeMinAge[0] = 1 * 60 * 60;
+        consensus.nStakeMinAge[1] = 1 * 60 * 60; // test net min age is 1 hour
         consensus.nStakeMaxAge = 30 * 24 * 60 * 60;
-        consensus.nModifierInterval = 30; // Modifier interval: time to elapse before new modifier is computed
+        consensus.nModifierInterval = 1 * 60; // Modifier interval: time to elapse before new modifier is computed
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.fPowNoRetargeting = true;
         consensus.nRuleChangeActivationThreshold = 108; // 75% for testchains

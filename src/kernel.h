@@ -27,7 +27,7 @@ uint64_t ComputeStakeModifierV2(const CBlockIndex* pindexPrev, const uint256& ke
 // Check whether stake kernel meets hash target
 // Sets hashProofOfStake on success return
 uint256 stakeHash(unsigned int nTimeTx, CDataStream ss, unsigned int prevoutIndex, uint256 prevoutHash, unsigned int nTimeBlockFrom);
-bool stakeTargetHit(const uint256& hashProofOfStake, int64_t nValueIn, const arith_uint256& bnTargetPerCoinDay);
+bool stakeTargetHit(const uint256& hashProofOfStake, int64_t nValueIn, const arith_uint256& bnTargetPerCoinDay, bool fNewWeight);
 bool CheckStakeKernelHash(const unsigned int& nBits, CBlockIndex* pindexPrev, const CBlockIndex* pindexFrom, const CTransactionRef& txPrev, const COutPoint& prevout, unsigned int& nTimeTx, unsigned int nHashDrift, bool fCheck, uint256& hashProofOfStake, bool fPrintProofOfStake = false);
 
 // Check kernel hash target and coinstake signature

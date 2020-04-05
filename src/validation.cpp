@@ -1225,10 +1225,12 @@ bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, const Consensus::P
         return error("%s: Deserialize or I/O error - %s at %s", __func__, e.what(), pos.ToString());
     }
 
-    // Check the header
-    uint256 hash = block.GetPoWHash();
-    if (block.IsProofOfWork() && hash != uint256S("0xf4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf") && !CheckProofOfWork(hash, block.nBits, consensusParams))
-        return error("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
+    if (block.IsProofOfWork()) {
+        // Check the header
+        uint256 hash = block.GetPoWHash();
+        if (hash != uint256S("0xf4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf") && !CheckProofOfWork(hash, block.nBits, consensusParams))
+            return error("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
+    }
 
     return true;
 }
@@ -2103,8 +2105,10 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     assert(*pindex->phashBlock == block.GetHash());
     int64_t nTimeStart = GetTimeMicros();
 
-    if ((pindex->nStakeModifier == 0 || !pindex->GeneratedStakeModifier()) && /*pindex->nStakeModifierChecksum == 0 &&*/ !ContextualCheckPoSBlock(block, state, pindex, chainparams.GetConsensus(), fJustCheck))
-        return error("%s: failed PoS check %s", __func__, FormatStateMessage(state));
+    bool fProofOfStake = block.IsProofOfStake();
+    if (pindex->GetBlockHash() != chainparams.GetConsensus().hashGenesisBlock && (fReindex || block.nVersion < chainparams.GetConsensus().nUpgradeBlockVersion[0]) && block.nBits != GetNextWorkRequired(pindex->pprev, &block, chainparams.GetConsensus()))
+        return state.Invalid(ValidationInvalidReason::CONSENSUS, error("%s: incorrect difficulty target", __func__), REJECT_INVALID, "bad-diffbits");
+    //LogPrintf("%s: INFO: block %i bnTarget = %s\n", __func__, pindex->nHeight, arith_uint256().SetCompact(block.nBits).ToString());
 
     // Check it again in case a previous version let a bad block in
     // NOTE: We don't currently (re-)invoke ContextualCheckBlock() or
@@ -2129,6 +2133,9 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
         return error("%s: Consensus::CheckBlock: %s", __func__, FormatStateMessage(state));
     }
 
+    if ((pindex->nStakeModifier == 0 || !pindex->GeneratedStakeModifier()) && /*pindex->nStakeModifierChecksum == 0 &&*/ !ContextualCheckPoSBlock(block, state, pindex, chainparams.GetConsensus(), fJustCheck))
+        return error("%s: failed PoS check %s", __func__, FormatStateMessage(state));
+
     // verify that the view's current state corresponds to the previous block
     uint256 hashPrevBlock = pindex->pprev == nullptr ? uint256() : pindex->pprev->GetBlockHash();
     assert(hashPrevBlock == view.GetBestBlock());
@@ -2141,10 +2148,10 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
         return true;
     }*/
 
-    bool fProofOfStake = block.IsProofOfStake();
-    if (!fProofOfStake && (pindex->nHeight > chainparams.GetConsensus().nLastPoWBlock)) {
+    if (fProofOfStake && pindex->nHeight < chainparams.GetConsensus().nPoSStartBlock)
+        return state.Invalid(ValidationInvalidReason::CONSENSUS, error("%s: PoS period not active", __func__), REJECT_INVALID, "PoS-early");
+    else if (!fProofOfStake && pindex->nHeight > chainparams.GetConsensus().nLastPoWBlock)
         return state.Invalid(ValidationInvalidReason::CONSENSUS, error("%s: PoW period ended", __func__), REJECT_INVALID, "PoW-ended");
-    }
 
     nBlocksTotal++;
 
@@ -3407,6 +3414,8 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
         pindexNew->BuildSkip();
     }
     pindexNew->nTimeMax = (pindexNew->pprev ? std::max(pindexNew->pprev->nTimeMax, pindexNew->nTime) : pindexNew->nTime);
+    if (block.nNonce == 0) // block.IsProofOfStake()
+        pindexNew->SetProofOfStake();
     pindexNew->nChainWork = (pindexNew->pprev ? pindexNew->pprev->nChainWork : 0) + GetBlockProof(*pindexNew);
     pindexNew->RaiseValidity(BLOCK_VALID_TREE);
     if (pindexBestHeader == nullptr || pindexBestHeader->nChainWork < pindexNew->nChainWork)
@@ -3420,8 +3429,6 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
 /** Mark a block as having its data received and checked (up to BLOCK_VALID_TRANSACTIONS). */
 void CChainState::ReceivedBlockTransactions(const CBlock& block, CBlockIndex* pindexNew, const FlatFilePos& pos, const Consensus::Params& consensusParams)
 {
-    if (block.IsProofOfStake())
-        pindexNew->SetProofOfStake();
     pindexNew->nTx = block.vtx.size();
     pindexNew->nChainTx = 0;
     pindexNew->nFile = pos.nFile;
@@ -3541,10 +3548,10 @@ static bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state,
 {
     static int64_t nBlockCheckTime = 0;
 
-    if (nBlockCheckTime == 0)
-        nBlockCheckTime = GetTime() - (2 * 24 * 60 * 60); // check the past 2 days worth of headers
+    //if (nBlockCheckTime == 0)
+        //nBlockCheckTime = GetTime() - (2 * 24 * 60 * 60); // check the past 2 days worth of headers
 
-    if (/*(block.nTime >= nBlockCheckTime || fReindex) &&*/ fCheckPOW && block.nVersion != 1610612736ULL) {
+    if ((block.nTime >= nBlockCheckTime || fReindex) && fCheckPOW) {
         // Check proof of work matches claimed amount
         uint256 hash = block.GetPoWHash();
         if (hash != uint256S("0xf4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf") && !CheckProofOfWork(hash, block.nBits, consensusParams))
@@ -3772,7 +3779,8 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
     // Check proof of work
     const Consensus::Params& consensusParams = params.GetConsensus();
     if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
-        return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "bad-diffbits", "incorrect proof of work");
+        return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "bad-diffbits", "incorrect difficulty target");
+    //LogPrintf("%s: block %i - bnTarget = %s, expected bnTarget = %s\n", __func__, nHeight, arith_uint256().SetCompact(block.nBits).ToString(), arith_uint256().SetCompact(GetNextWorkRequired(pindexPrev, &block, consensusParams)).ToString());
 
     // Check against checkpoints
     if (fCheckpointsEnabled) {
@@ -3788,8 +3796,12 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
     if ((nHeight >= consensusParams.nMandatoryUpgradeBlock[1] && block.GetBlockTime() <= pindexPrev->GetBlockTime()) || (block.nVersion >= consensusParams.nUpgradeBlockVersion[0] && block.GetBlockTime() <= pindexPrev->GetMedianTimePast()))
         return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "time-too-old", "block's timestamp is too early");
 
+    // Check masked timestamp for PoS
+    if (nHeight >= consensusParams.nMandatoryUpgradeBlock[1] && block.nNonce == 0 && (block.GetBlockTime() & consensusParams.nStakeTimestampMask) != 0) // block.IsProofOfStake()
+        return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "invalid-time-mask", "block timestamp mask not valid");
+
     // Check timestamp
-    if (block.GetBlockTime() > nAdjustedTime + (nHeight >= consensusParams.nMandatoryUpgradeBlock[1] ? MAX_FUTURE_BLOCK_TIME : 180))
+    if (block.GetBlockTime() > nAdjustedTime + (Params().NetworkIDString() != CBaseChainParams::REGTEST && nHeight >= consensusParams.nMandatoryUpgradeBlock[1] ? MAX_FUTURE_BLOCK_TIME : 180))
         return state.Invalid(ValidationInvalidReason::BLOCK_TIME_FUTURE, false, REJECT_INVALID, "time-too-new", "block timestamp too far in the future");
 
     // Reject outdated version blocks when 95% (75% on testnet) of the network has upgraded:

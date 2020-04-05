@@ -141,23 +141,20 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     int nDescendantsUpdated = 0;
     addPackageTxs(nPackagesSelected, nDescendantsUpdated);
 
-    //if (nHeight >= consensusParams.nMandatoryUpgradeBlock[1]) {
-        // Ensure that transactions are canonically ordered
-        std::sort(std::begin(pblocktemplate->entries) + (pblock->IsProofOfStake()?2:1),
-                  std::end(pblocktemplate->entries),
-                  [](const CBlockTemplateEntry &a, const CBlockTemplateEntry &b)
-                      -> bool {
-                          const uint256 &txbHash = b.tx->GetHash();
-                          bool txbIsInput = false;
-                          for (const CTxIn &vin : a.tx->vin) {
-                              if (vin.prevout.hash == txbHash) {
-                                  txbIsInput = true; // one of a.tx's inputs is b.tx, so we cannot put a.tx before b.tx in the block (topological order must be kept)
-                                  break;
-                              }
-                          }
-                          return !txbIsInput && a.tx->GetWitnessHash() < b.tx->GetWitnessHash();
-                      });
-    //}
+    // Ensure that transactions are canonically ordered
+    std::sort(std::begin(pblocktemplate->entries) + (pblock->IsProofOfStake()?2:1),
+            std::end(pblocktemplate->entries),
+            [](const CBlockTemplateEntry &a, const CBlockTemplateEntry &b) -> bool {
+                const uint256 &txbHash = b.tx->GetHash();
+                bool txbIsInput = false;
+                for (const CTxIn &vin : a.tx->vin) {
+                    if (vin.prevout.hash == txbHash) {
+                        txbIsInput = true; // one of a.tx's inputs is b.tx, so we cannot put a.tx before b.tx in the block (topological order must be kept)
+                        break;
+                    }
+                }
+                return !txbIsInput && a.tx->GetWitnessHash() < b.tx->GetWitnessHash();
+            });
 
     // Copy all the transactions refs into the block
     pblock->vtx.reserve(pblocktemplate->entries.size());
@@ -188,8 +185,8 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     // Fill in header
     pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
     UpdateTime(pblock, consensusParams, pindexPrev);
+    pblock->nNonce         = 1;
     pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock, consensusParams);
-    pblock->nNonce         = 0;
     pblocktemplate->entries[0].sigOpsCost = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(*pblock->vtx[0]);
 
     CValidationState state;

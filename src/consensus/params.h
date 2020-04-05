@@ -59,6 +59,7 @@ struct Params {
     int nGovernanceFilterElements;
     int nMasternodeMinimumConfirmations;
     int64_t nMasternodeCollateral[3];
+    int nPoSStartBlock;
     int nLastPoWBlock;
     int nMandatoryUpgradeBlock[2];
     uint32_t nUpgradeBlockVersion[2];
@@ -91,7 +92,7 @@ struct Params {
     uint32_t nMinerConfirmationWindow;
     BIP9Deployment vDeployments[MAX_VERSION_BITS_DEPLOYMENTS];
     /** Proof of work parameters */
-    uint256 powLimit;
+    uint256 powLimit[2];
     bool fPowAllowMinDifficultyBlocks;
     bool fPowNoRetargeting;
     int64_t nPowTargetSpacing;
@@ -101,9 +102,9 @@ struct Params {
     uint256 defaultAssumeValid;
 
     /** peercoin stuff */
-    int64_t nStakeTargetSpacing;
-    int64_t nStakeMinDepth;
-    int64_t nStakeMinAge;
+    int nStakeTimestampMask;
+    int nStakeMinDepth[2];
+    int64_t nStakeMinAge[2];
     int64_t nStakeMaxAge;
     int64_t nModifierInterval;
 };
