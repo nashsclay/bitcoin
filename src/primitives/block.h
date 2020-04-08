@@ -1,5 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2018 The Bitcoin Core developers
+// Copyright (c) 2020 ComputerCraftr
+// Copyright (c) 2018-2020 The Simplicity developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -21,6 +23,7 @@ class CBlockHeader
 {
 public:
     // header
+    static const uint32_t CURRENT_VERSION = 9;
     uint32_t nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
@@ -58,6 +61,61 @@ public:
     bool IsNull() const
     {
         return (nBits == 0);
+    }
+
+    // peercoin: two types of block: proof-of-work or proof-of-stake
+    bool IsProofOfStake() const
+    {
+        // nNonce == 0 for PoS blocks
+        return (nVersion & VERSION_ALGO) == VERSION_POS || (nVersion < CBlockHeader::CURRENT_VERSION && nNonce == 0);
+    }
+
+    bool IsProofOfWork() const
+    {
+        return (nVersion & VERSION_POW) || (nVersion < CBlockHeader::CURRENT_VERSION && nNonce != 0);
+    }
+
+    enum BlockType {
+        ALGO_POS = 0,
+        ALGO_POW_QUARK = 1,
+        ALGO_POW_SCRYPT_SQUARED = 2,
+        ALGO_COUNT
+    };
+
+    enum AlgoFlags {
+        VERSION_POS = 1<<29,
+        VERSION_POW_QUARK = 2<<29,
+        VERSION_POW_SCRYPT_SQUARED = 3<<29,
+        VERSION_ALGO = 7<<29,
+        VERSION_POW = 6<<29
+    };
+
+    static int GetAlgo(int version)
+    {
+        switch (version & VERSION_ALGO) {
+            case VERSION_POS:
+                return ALGO_POS;
+            case VERSION_POW_QUARK:
+                return ALGO_POW_QUARK;
+            case VERSION_POW_SCRYPT_SQUARED:
+                return ALGO_POW_SCRYPT_SQUARED;
+            default:
+                return -1;
+        }
+    }
+
+    static uint32_t GetVer(int algo)
+    {
+        switch (algo) {
+            case ALGO_POS:
+                return VERSION_POS;
+            case ALGO_POW_QUARK:
+                return VERSION_POW_QUARK;
+            case ALGO_POW_SCRYPT_SQUARED:
+                return VERSION_POW_SCRYPT_SQUARED;
+            default:
+                return CBlockHeader::CURRENT_VERSION;
+        }
     }
 
     uint256 GetHash() const;
@@ -128,7 +186,7 @@ public:
     }
 
     // peercoin: two types of block: proof-of-work or proof-of-stake
-    bool IsProofOfStake() const
+    /*bool IsProofOfStake() const
     {
         return (vtx.size() > 1 && vtx[1]->IsCoinStake());
     }
@@ -136,7 +194,7 @@ public:
     bool IsProofOfWork() const
     {
         return !IsProofOfStake();
-    }
+    }*/
 
     unsigned int GetStakeEntropyBit() const; // peercoin: entropy bit for stake modifier if chosen by modifier
 

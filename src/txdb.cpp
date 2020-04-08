@@ -283,12 +283,13 @@ bool CBlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, 
                 //pindexNew->nStakeTime     = diskindex.nStakeTime;
                 //pindexNew->hashProofOfStake = diskindex.hashProofOfStake;
 
-                // treat PoW and PoS blocks the same - don't waste time on redundant PoW checks that won't catch invalid PoS blocks anyway - nNonce = 0 for PoS blocks
-                //if ((pindexNew->nNonce != 0 || pindexNew->nVersion >= consensusParams.nUpgradeBlockVersion[0]) && pindexNew->IsProofOfWork() /*&& CBlockHeader::GetAlgo(pindexNew->nVersion) != POW_SCRYPT_SQUARED*/) { //TODO
-                    //uint256 hash = pindexNew->GetBlockHeader().GetPoWHash();
-                    //if (hash != uint256S("0xf4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf") && !CheckProofOfWork(hash, pindexNew->nBits, consensusParams))
-                        //return error("%s: CheckProofOfWork failed: %s", __func__, pindexNew->ToString());
-                //}
+                // Treat PoW and PoS blocks the same - don't waste time on redundant PoW checks that won't catch invalid PoS blocks anyway - nNonce == 0 for PoS blocks
+                const int algo = CBlockHeader::GetAlgo(pindexNew->nVersion);
+                if (pindexNew->IsProofOfWork() && algo != CBlockHeader::ALGO_POW_SCRYPT_SQUARED) {
+                    uint256 hash = pindexNew->GetBlockHeader().GetPoWHash();
+                    if (hash != uint256S("0xf4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf") && !CheckProofOfWork(hash, pindexNew->nBits, algo, consensusParams))
+                        return error("%s: CheckProofOfWork failed: %s", __func__, pindexNew->ToString());
+                }
 
                 pcursor->Next();
             } else {

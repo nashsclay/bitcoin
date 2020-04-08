@@ -50,7 +50,7 @@ static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesi
         arith_uint256 hash = UintToArith256(genesis.GetPoWHash());
         if (hash <= hashTarget) {
             // Found a solution
-            printf("genesis block found\n   hash: %s\n target: %s\n   bits: %u\n  nonce: %u\n", hash.ToString().c_str(), hashTarget.ToString().c_str(), genesis.nBits, genesis.nNonce);
+            printf("genesis block found\n   hash: %s\n target: %s\n   bits: %08x\n  nonce: %u\n", hash.ToString().c_str(), hashTarget.ToString().c_str(), genesis.nBits, genesis.nNonce);
             break;
         }
         genesis.nNonce += 1;
@@ -119,9 +119,10 @@ public:
         consensus.CSVHeight = 1; // 63740505e585d80da6d612d0ddbdaec3b3eebd86c1c7447ebeebe13841a7efdd
         consensus.SegwitHeight = 0; // f4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf
         consensus.MinBIP9WarningHeight = 0; // segwit activation height + miner confirmation window
-        consensus.powLimit[0] = uint256S("00000fffff000000000000000000000000000000000000000000000000000000"); // PoS limit
-        consensus.powLimit[1] = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000"); // 0x1f00ffff
-        consensus.nPowTargetTimespan = 1 * 24 * 60 * 60; // one day
+        consensus.powLimit[CBlockHeader::ALGO_POS] = uint256S("00000fffff000000000000000000000000000000000000000000000000000000"); // 0x1e0fffff
+        consensus.powLimit[CBlockHeader::ALGO_POW_QUARK] = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000"); // 0x1f00ffff
+        consensus.powLimit[CBlockHeader::ALGO_POW_SCRYPT_SQUARED] = uint256S("001fffff00000000000000000000000000000000000000000000000000000000"); // 0x1f1fffff
+        consensus.nPowTargetTimespan = 3 * 60 * 60; // 3 hours
         consensus.nPowTargetSpacing = 80; // 80-second block spacing
         consensus.nStakeTimestampMask = 0xf; // 16 second time slots - normally, more than this wouldn't work with an 80 second block time because 80 isn't divisible by 32, but the effective PoS target spacing is 160 seconds due to hybrid PoW/PoS
         consensus.nStakeMinDepth[0] = 200;
@@ -132,8 +133,8 @@ public:
         consensus.nModifierInterval = 1 * 60; // Modifier interval: time to elapse before new modifier is computed
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.fPowNoRetargeting = false;
-        consensus.nRuleChangeActivationThreshold = 1916; // 95% of 2016
-        consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
+        consensus.nRuleChangeActivationThreshold = 0.95 * 7 * 24 * 60 * 60 / consensus.nPowTargetSpacing; // 95% of the blocks in the past week
+        consensus.nMinerConfirmationWindow = 7 * 24 * 60 * 60 / consensus.nPowTargetSpacing; // nPowTargetTimespan / nPowTargetSpacing
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 1230767999; // December 31, 2008
@@ -158,7 +159,7 @@ public:
         m_assumed_blockchain_size = 5;
         m_assumed_chain_state_size = 1;
 
-        genesis = CreateGenesisBlock(1517690700, 561379, UintToArith256(consensus.powLimit[1]).GetCompact(), 1, 0 * COIN);
+        genesis = CreateGenesisBlock(1517690700, 561379, UintToArith256(consensus.powLimit[CBlockHeader::ALGO_POW_QUARK]).GetCompact(), 1, 0 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
         //printf("Merkle hash mainnet: %s\n", genesis.hashMerkleRoot.ToString().c_str());
         //printf("Genesis hash mainnet: %s\n", consensus.hashGenesisBlock.ToString().c_str());
@@ -255,8 +256,8 @@ public:
         consensus.nMandatoryUpgradeBlock[1] = 0;
         consensus.nUpgradeBlockVersion[0] = 0; // Block headers must be at least this version after upgrade block
         consensus.nUpgradeBlockVersion[1] = 0;
-        consensus.nBadScryptDiffStartTime = NEVER;
-        consensus.nBadScryptDiffEndTime = NEVER;
+        consensus.nBadScryptDiffStartTime = 0;
+        consensus.nBadScryptDiffEndTime = 0;
         consensus.BIP16Exception = uint256S("0x0000000000000000000000000000000000000000000000000000000000000000");
         consensus.BIP34Height = 0;
         consensus.BIP34Hash = uint256S("0x16e0228f2712c94c10ec590a98a416a664bdf42ebd10a6ffe563d817ee19b6b9");
@@ -265,9 +266,10 @@ public:
         consensus.CSVHeight = 1; // 000037a145d6812571b0c413d868a43146d7159056afe7a06b344e9ee0de39fc
         consensus.SegwitHeight = 0; // 16e0228f2712c94c10ec590a98a416a664bdf42ebd10a6ffe563d817ee19b6b9
         consensus.MinBIP9WarningHeight = 0; // segwit activation height + miner confirmation window
-        consensus.powLimit[0] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000"); // PoS limit
-        consensus.powLimit[1] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000"); // uint256S("00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.nPowTargetTimespan = 1 * 24 * 60 * 60; // one day
+        consensus.powLimit[CBlockHeader::ALGO_POS] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit[CBlockHeader::ALGO_POW_QUARK] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000"); // uint256S("00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        consensus.powLimit[CBlockHeader::ALGO_POW_SCRYPT_SQUARED] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
+        consensus.nPowTargetTimespan = 3 * 60 * 60; // 3 hours
         consensus.nPowTargetSpacing = 64; // 64-second block spacing
         consensus.nStakeTimestampMask = 0xf; // 16 second time slots
         consensus.nStakeMinDepth[0] = 100;
@@ -278,8 +280,8 @@ public:
         consensus.nModifierInterval = 1 * 60; // Modifier interval: time to elapse before new modifier is computed
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.fPowNoRetargeting = false;
-        consensus.nRuleChangeActivationThreshold = 1512; // 75% for testchains
-        consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
+        consensus.nRuleChangeActivationThreshold = 0.75 * 7 * 24 * 60 * 60 / consensus.nPowTargetSpacing; // 75% for testchains
+        consensus.nMinerConfirmationWindow = 7 * 24 * 60 * 60 / consensus.nPowTargetSpacing; // nPowTargetTimespan / nPowTargetSpacing
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 1230767999; // December 31, 2008
@@ -299,7 +301,7 @@ public:
         m_assumed_blockchain_size = 5;
         m_assumed_chain_state_size = 1;
 
-        genesis = CreateGenesisBlock(1574924400, 2961, UintToArith256(consensus.powLimit[1]).GetCompact(), 2<<29, 10000 * COIN);
+        genesis = CreateGenesisBlock(1574924400, 2961, UintToArith256(consensus.powLimit[CBlockHeader::ALGO_POW_QUARK]).GetCompact(), CBlockHeader::VERSION_POW_QUARK, 10000 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
         //printf("Merkle hash testnet: %s\n", genesis.hashMerkleRoot.ToString().c_str());
         //printf("Genesis hash testnet: %s\n", consensus.hashGenesisBlock.ToString().c_str());
@@ -378,8 +380,8 @@ public:
         consensus.nMandatoryUpgradeBlock[1] = 0;
         consensus.nUpgradeBlockVersion[0] = 0; // Block headers must be at least this version after upgrade block
         consensus.nUpgradeBlockVersion[1] = 0;
-        consensus.nBadScryptDiffStartTime = NEVER;
-        consensus.nBadScryptDiffEndTime = NEVER;
+        consensus.nBadScryptDiffStartTime = 0;
+        consensus.nBadScryptDiffEndTime = 0;
         consensus.BIP16Exception = uint256();
         consensus.BIP34Height = 500; // BIP34 activated on regtest (Used in functional tests)
         consensus.BIP34Hash = uint256();
@@ -388,9 +390,10 @@ public:
         consensus.CSVHeight = 432; // CSV activated on regtest (Used in rpc activation tests)
         consensus.SegwitHeight = 0; // SEGWIT is always activated on regtest unless overridden
         consensus.MinBIP9WarningHeight = 0;
-        consensus.powLimit[0] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
-        consensus.powLimit[1] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
-        consensus.nPowTargetTimespan = 1 * 24 * 60 * 60; // one day
+        consensus.powLimit[CBlockHeader::ALGO_POS] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit[CBlockHeader::ALGO_POW_QUARK] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit[CBlockHeader::ALGO_POW_SCRYPT_SQUARED] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
+        consensus.nPowTargetTimespan = 40 * 60; // 40 minutes
         consensus.nPowTargetSpacing = 32; // 32-second block spacing
         consensus.nStakeTimestampMask = 0x3; // 4 second time slots
         consensus.nStakeMinDepth[0] = 0;
@@ -401,8 +404,8 @@ public:
         consensus.nModifierInterval = 1 * 60; // Modifier interval: time to elapse before new modifier is computed
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.fPowNoRetargeting = true;
-        consensus.nRuleChangeActivationThreshold = 108; // 75% for testchains
-        consensus.nMinerConfirmationWindow = 144; // Faster than normal for regtest (144 instead of 2016)
+        consensus.nRuleChangeActivationThreshold = 0.75 * 24 * 60 * 60 / consensus.nPowTargetSpacing; // 75% for testchains
+        consensus.nMinerConfirmationWindow = 24 * 60 * 60 / consensus.nPowTargetSpacing; // Faster than normal for regtest (one day instead of one week)
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 0;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
@@ -424,7 +427,7 @@ public:
 
         UpdateActivationParametersFromArgs(args);
 
-        genesis = CreateGenesisBlock(1574924400, 47047, 0x1f00ffff, 2<<29, 10000 * COIN);
+        genesis = CreateGenesisBlock(1574924400, 47047, 0x1f00ffff, CBlockHeader::VERSION_POW_QUARK, 10000 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
         //printf("Merkle hash regtest: %s\n", genesis.hashMerkleRoot.ToString().c_str());
         //printf("Genesis hash regtest: %s\n", consensus.hashGenesisBlock.ToString().c_str());

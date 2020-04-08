@@ -71,7 +71,7 @@ BOOST_AUTO_TEST_CASE(CheckProofOfWork_test_negative_target)
     unsigned int nBits;
     nBits = UintToArith256(consensus.powLimit[1]).GetCompact(true);
     hash.SetHex("0x1");
-    BOOST_CHECK(!CheckProofOfWork(hash, nBits, consensus));
+    BOOST_CHECK(!CheckProofOfWork(hash, nBits, CBlockHeader::ALGO_POW_QUARK, consensus));
 }
 
 BOOST_AUTO_TEST_CASE(CheckProofOfWork_test_overflow_target)
@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(CheckProofOfWork_test_overflow_target)
     uint256 hash;
     unsigned int nBits = ~0x00800000;
     hash.SetHex("0x1");
-    BOOST_CHECK(!CheckProofOfWork(hash, nBits, consensus));
+    BOOST_CHECK(!CheckProofOfWork(hash, nBits, CBlockHeader::ALGO_POW_QUARK, consensus));
 }
 
 BOOST_AUTO_TEST_CASE(CheckProofOfWork_test_too_easy_target)
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(CheckProofOfWork_test_too_easy_target)
     nBits_arith *= 2;
     nBits = nBits_arith.GetCompact();
     hash.SetHex("0x1");
-    BOOST_CHECK(!CheckProofOfWork(hash, nBits, consensus));
+    BOOST_CHECK(!CheckProofOfWork(hash, nBits, CBlockHeader::ALGO_POW_QUARK, consensus));
 }
 
 BOOST_AUTO_TEST_CASE(CheckProofOfWork_test_biger_hash_than_target)
@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(CheckProofOfWork_test_biger_hash_than_target)
     nBits = hash_arith.GetCompact();
     hash_arith *= 2; // hash > nBits
     hash = ArithToUint256(hash_arith);
-    BOOST_CHECK(!CheckProofOfWork(hash, nBits, consensus));
+    BOOST_CHECK(!CheckProofOfWork(hash, nBits, CBlockHeader::ALGO_POW_QUARK, consensus));
 }
 
 BOOST_AUTO_TEST_CASE(CheckProofOfWork_test_zero_target)
@@ -115,7 +115,7 @@ BOOST_AUTO_TEST_CASE(CheckProofOfWork_test_zero_target)
     arith_uint256 hash_arith{0};
     nBits = hash_arith.GetCompact();
     hash = ArithToUint256(hash_arith);
-    BOOST_CHECK(!CheckProofOfWork(hash, nBits, consensus));
+    BOOST_CHECK(!CheckProofOfWork(hash, nBits, CBlockHeader::ALGO_POW_QUARK, consensus));
 }
 
 BOOST_AUTO_TEST_CASE(GetBlockProofEquivalentTime_test)

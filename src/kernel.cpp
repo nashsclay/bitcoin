@@ -388,14 +388,14 @@ uint256 stakeHash(unsigned int nTimeTx, CDataStream ss, unsigned int prevoutInde
 bool stakeTargetHit(const uint256& hashProofOfStake, int64_t nValueIn, const arith_uint256& bnTargetPerCoinDay, bool fNewWeight)
 {
     // Get the stake weight - weight is equal to coin amount
-    arith_uint256 bnCoinDayWeight = fNewWeight ? arith_uint256(nValueIn) : arith_uint256(nValueIn) / 100;
+    arith_uint256 bnCoinDayWeight = fNewWeight ? arith_uint256(nValueIn) : (arith_uint256(nValueIn) / 100);
 
     // Now check if proof-of-stake hash meets target protocol
     return (UintToArith256(hashProofOfStake) <= bnCoinDayWeight * bnTargetPerCoinDay);
 }
 
 // Get the stake modifier specified by the protocol to hash for a stake kernel
-static bool GetKernelStakeModifier(CBlockIndex* pindexPrev, uint256 hashBlockFrom, unsigned int nTimeTx, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
+bool GetKernelStakeModifier(CBlockIndex* pindexPrev, uint256 hashBlockFrom, unsigned int nTimeTx, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
 {
     // Hash the modifier - PIVX
     /*if (Params().IsStakeModifierV2(pindexPrev->nHeight + 1)) {

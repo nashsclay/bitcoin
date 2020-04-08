@@ -113,7 +113,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
 
     const Consensus::Params &consensusParams = chainparams.GetConsensus();
 
-    pblock->nVersion = ComputeBlockVersion(pindexPrev, consensusParams);
+    pblock->nVersion = ComputeBlockVersion(pindexPrev, CBlockHeader::ALGO_POW_QUARK, consensusParams);
     // -regtest only: allow overriding block.nVersion with
     // -blockversion=N to test forking scenarios
     if (chainparams.MineBlocksOnDemand())
@@ -185,8 +185,8 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     // Fill in header
     pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
     UpdateTime(pblock, consensusParams, pindexPrev);
-    pblock->nNonce         = 1;
     pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock, consensusParams);
+    pblock->nNonce         = 0;
     pblocktemplate->entries[0].sigOpsCost = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(*pblock->vtx[0]);
 
     CValidationState state;

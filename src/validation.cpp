@@ -1225,10 +1225,10 @@ bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, const Consensus::P
         return error("%s: Deserialize or I/O error - %s at %s", __func__, e.what(), pos.ToString());
     }
 
-    if (block.IsProofOfWork()) {
+    if (block.IsProofOfWork() && CBlockHeader::GetAlgo(block.nVersion) != CBlockHeader::ALGO_POW_SCRYPT_SQUARED) {
         // Check the header
         uint256 hash = block.GetPoWHash();
-        if (hash != uint256S("0xf4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf") && !CheckProofOfWork(hash, block.nBits, consensusParams))
+        if (hash != uint256S("0xf4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf") && !CheckProofOfWork(hash, block.nBits, CBlockHeader::GetAlgo(block.nVersion), consensusParams))
             return error("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
     }
 
@@ -1911,10 +1911,10 @@ void ThreadScriptCheck(int worker_num) {
 
 VersionBitsCache versionbitscache GUARDED_BY(cs_main);
 
-int32_t ComputeBlockVersion(const CBlockIndex* pindexPrev, const Consensus::Params& params)
+int32_t ComputeBlockVersion(const CBlockIndex* pindexPrev, int algo, const Consensus::Params& params)
 {
     LOCK(cs_main);
-    int32_t nVersion = VERSIONBITS_TOP_BITS;
+    int32_t nVersion = CBlockHeader::GetVer(algo); //VERSIONBITS_TOP_BITS;
 
     for (int i = 0; i < (int)Consensus::MAX_VERSION_BITS_DEPLOYMENTS; i++) {
         ThresholdState state = VersionBitsState(pindexPrev, params, static_cast<Consensus::DeploymentPos>(i), versionbitscache);
@@ -1957,7 +1957,7 @@ public:
         return pindex->nHeight >= params.MinBIP9WarningHeight &&
                ((pindex->nVersion & VERSIONBITS_TOP_MASK) == VERSIONBITS_TOP_BITS) &&
                ((pindex->nVersion >> bit) & 1) != 0 &&
-               ((ComputeBlockVersion(pindex->pprev, params) >> bit) & 1) == 0;
+               ((ComputeBlockVersion(pindex->pprev, CBlockHeader::GetAlgo(pindex->nVersion), params) >> bit) & 1) == 0;
     }
 };
 
@@ -2677,7 +2677,7 @@ void static UpdateTip(const CBlockIndex* pindexNew, const CChainParams& chainPar
         // Check the version of the last 100 blocks to see if we need to upgrade:
         for (int i = 0; i < 100 && pindex != nullptr; i++)
         {
-            int32_t nExpectedVersion = ComputeBlockVersion(pindex->pprev, chainParams.GetConsensus());
+            int32_t nExpectedVersion = ComputeBlockVersion(pindex->pprev, CBlockHeader::GetAlgo(pindex->nVersion), chainParams.GetConsensus());
             if (pindex->nVersion > VERSIONBITS_LAST_OLD_BLOCK_VERSION && (pindex->nVersion & ~nExpectedVersion) != 0)
                 ++nUpgraded;
             pindex = pindex->pprev;
@@ -2685,8 +2685,8 @@ void static UpdateTip(const CBlockIndex* pindexNew, const CChainParams& chainPar
         if (nUpgraded > 0)
             AppendWarning(warningMessages, strprintf(_("%d of last 100 blocks have unexpected version").translated, nUpgraded));
     }
-    LogPrintf("%s: new best=%s height=%d version=0x%08x log2_work=%.8g tx=%lu date='%s' progress=%f cache=%.1fMiB(%utxo)%s\n", __func__,
-      pindexNew->GetBlockHash().ToString(), pindexNew->nHeight, pindexNew->nVersion,
+    LogPrintf("%s: new best=%s height=%d version=0x%08x type=%i log2_work=%.8g tx=%lu date='%s' progress=%f cache=%.1fMiB(%utxo)%s\n", __func__,
+      pindexNew->GetBlockHash().ToString(), pindexNew->nHeight, pindexNew->nVersion, CBlockHeader::GetAlgo(pindexNew->nVersion) == -1 ? pindexNew->IsProofOfWork() : CBlockHeader::GetAlgo(pindexNew->nVersion),
       log(pindexNew->nChainWork.getdouble())/log(2.0), (unsigned long)pindexNew->nChainTx,
       FormatISO8601DateTime(pindexNew->GetBlockTime()),
       GuessVerificationProgress(chainParams.TxData(), pindexNew), ::ChainstateActive().CoinsTip().DynamicMemoryUsage() * (1.0 / (1<<20)), ::ChainstateActive().CoinsTip().GetCacheSize(),
@@ -3414,7 +3414,7 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
         pindexNew->BuildSkip();
     }
     pindexNew->nTimeMax = (pindexNew->pprev ? std::max(pindexNew->pprev->nTimeMax, pindexNew->nTime) : pindexNew->nTime);
-    if (block.nNonce == 0) // block.IsProofOfStake()
+    if (block.IsProofOfStake())
         pindexNew->SetProofOfStake();
     pindexNew->nChainWork = (pindexNew->pprev ? pindexNew->pprev->nChainWork : 0) + GetBlockProof(*pindexNew);
     pindexNew->RaiseValidity(BLOCK_VALID_TREE);
@@ -3551,11 +3551,16 @@ static bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state,
     //if (nBlockCheckTime == 0)
         //nBlockCheckTime = GetTime() - (2 * 24 * 60 * 60); // check the past 2 days worth of headers
 
-    if ((block.nTime >= nBlockCheckTime || fReindex) && fCheckPOW) {
+    const int algo = CBlockHeader::GetAlgo(block.nVersion);
+    if ((block.nVersion >= consensusParams.nUpgradeBlockVersion[0] && algo == -1) || (block.IsProofOfStake() && block.nNonce != 0))
+        return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "invalid-type", "block type is invalid");
+
+    if (block.IsProofOfWork() && fCheckPOW && (block.nTime >= nBlockCheckTime || algo != CBlockHeader::ALGO_POW_SCRYPT_SQUARED || fReindex) && (algo != CBlockHeader::ALGO_POW_SCRYPT_SQUARED || block.nTime >= consensusParams.nBadScryptDiffEndTime || block.nTime < consensusParams.nBadScryptDiffStartTime)) {
         // Check proof of work matches claimed amount
         uint256 hash = block.GetPoWHash();
-        if (hash != uint256S("0xf4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf") && !CheckProofOfWork(hash, block.nBits, consensusParams))
+        if (hash != uint256S("0xf4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf") && !CheckProofOfWork(hash, block.nBits, algo, consensusParams))
             return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "high-hash", "proof of work failed");
+            //LogPrintf("block %s has invalid PoW hash %s\n", block.GetHash().ToString(), hash.ToString());
     }
 
     return true;
@@ -3564,15 +3569,15 @@ static bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state,
 bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSignature)
 {
     // These are checks that are independent of context.
-    const bool IsPoS = block.IsProofOfStake(); //|| (block.vtx.size() > 1 && block.vtx[1].IsCoinStake());
-    LogPrint(BCLog::NET, "%s: block=%s is %s\n", __func__, block.GetHash().ToString(), IsPoS ? "proof of stake" : "proof of work");
+    const bool IsPoS = block.IsProofOfStake();
+    LogPrint(BCLog::NET, "%s: block=%s is %s with type=%i\n", __func__, block.GetHash().ToString(), IsPoS ? "proof of stake" : "proof of work", CBlockHeader::GetAlgo(block.nVersion) == -1 ? !IsPoS : CBlockHeader::GetAlgo(block.nVersion));
 
     if (block.fChecked)
         return true;
 
     // Check that the header is valid (particularly PoW).  This is mostly
     // redundant with the call in AcceptBlockHeader.
-    if (!CheckBlockHeader(block, state, consensusParams, fCheckPOW && !IsPoS))
+    if (!CheckBlockHeader(block, state, consensusParams, fCheckPOW))
         return false;
 
     // Check the merkle root.
@@ -3606,10 +3611,12 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
         if (block.vtx[i]->IsCoinBase())
             return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-cb-multiple", "more than one coinbase");
 
-    // peercoin: only the second transaction can be the optional coinstake
+    // peercoin: only the second transaction can be the coinstake
+    if (IsPoS && (block.vtx.size() < 2 || !block.vtx[1]->IsCoinStake()))
+        return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-cs-missing", "second tx is not coinstake");
     for (unsigned int i = IsPoS ? 2 : 1; i < block.vtx.size(); i++)
         if (block.vtx[i]->IsCoinStake())
-            return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-cs-missing", "coinstake in wrong position");
+            return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-cs-multiple", "coinstake in wrong position");
 
     // peercoin: first coinbase output should be empty if proof-of-stake block
     int voutSize = block.vtx[0]->vout.size();
@@ -3797,7 +3804,7 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
         return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "time-too-old", "block's timestamp is too early");
 
     // Check masked timestamp for PoS
-    if (nHeight >= consensusParams.nMandatoryUpgradeBlock[1] && block.nNonce == 0 && (block.GetBlockTime() & consensusParams.nStakeTimestampMask) != 0) // block.IsProofOfStake()
+    if (nHeight >= consensusParams.nMandatoryUpgradeBlock[1] && block.IsProofOfStake() && (block.GetBlockTime() & consensusParams.nStakeTimestampMask) != 0)
         return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "invalid-time-mask", "block timestamp mask not valid");
 
     // Check timestamp
@@ -3956,7 +3963,7 @@ bool BlockManager::AcceptBlockHeader(const CBlockHeader& block, CValidationState
             return true;
         }
 
-        if (!CheckBlockHeader(block, state, chainparams.GetConsensus(), block.nNonce != 0 /*|| (block.nVersion >= chainparams.GetConsensus().nUpgradeBlockVersion[0] && block.IsProofOfWork())*/)) //nNonce = 0 for PoS blocks
+        if (!CheckBlockHeader(block, state, chainparams.GetConsensus()))
             return error("%s: Consensus::CheckBlockHeader: %s, %s", __func__, hash.ToString(), FormatStateMessage(state));
 
         // Get prev block index
