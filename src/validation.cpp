@@ -3789,6 +3789,10 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
         return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "bad-diffbits", "incorrect difficulty target");
     //LogPrintf("%s: block %i - bnTarget = %s, expected bnTarget = %s\n", __func__, nHeight, arith_uint256().SetCompact(block.nBits).ToString(), arith_uint256().SetCompact(GetNextWorkRequired(pindexPrev, &block, consensusParams)).ToString());
 
+    // Reject new PoW algorithms until they have been activated
+    if (nHeight < consensusParams.nMandatoryUpgradeBlock[1] && CBlockHeader::GetAlgo(block.nVersion) > CBlockHeader::ALGO_POW_SCRYPT_SQUARED)
+        return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "new-algo", "block using new algo before activation");
+
     // Check against checkpoints
     if (fCheckpointsEnabled) {
         // Don't accept any forks from the main chain prior to last checkpoint.

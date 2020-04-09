@@ -79,6 +79,8 @@ public:
         ALGO_POS = 0,
         ALGO_POW_QUARK = 1,
         ALGO_POW_SCRYPT_SQUARED = 2,
+        ALGO_POW_SHA1D = 3,
+        ALGO_POW_ARGON2D = 4,
         ALGO_COUNT
     };
 
@@ -86,6 +88,8 @@ public:
         VERSION_POS = 1<<29,
         VERSION_POW_QUARK = 2<<29,
         VERSION_POW_SCRYPT_SQUARED = 3<<29,
+        VERSION_POW_SHA1D = 4<<29,
+        VERSION_POW_ARGON2D = 5<<29,
         VERSION_ALGO = 7<<29,
         VERSION_POW = 6<<29
     };
@@ -99,6 +103,10 @@ public:
                 return ALGO_POW_QUARK;
             case VERSION_POW_SCRYPT_SQUARED:
                 return ALGO_POW_SCRYPT_SQUARED;
+            case VERSION_POW_SHA1D:
+                return ALGO_POW_SHA1D;
+            case VERSION_POW_ARGON2D:
+                return ALGO_POW_ARGON2D;
             default:
                 return -1;
         }
@@ -113,6 +121,10 @@ public:
                 return VERSION_POW_QUARK;
             case ALGO_POW_SCRYPT_SQUARED:
                 return VERSION_POW_SCRYPT_SQUARED;
+            case ALGO_POW_SHA1D:
+                return VERSION_POW_SHA1D;
+            case ALGO_POW_ARGON2D:
+                return VERSION_POW_ARGON2D;
             default:
                 return CBlockHeader::CURRENT_VERSION;
         }

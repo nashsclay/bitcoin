@@ -17,14 +17,7 @@ uint256 CBlockHeader::GetHash() const
 {
     if (nVersion > 1)
         return SerializeHash(*this);
-    /*else if (nVersion == 0) {
-        std::vector<unsigned char> vch(80); // block header size in bytes
-        CVectorWriter ss(SER_NETWORK, PROTOCOL_VERSION, vch, 0);
-        ss << *this;
-        uint256 thash;
-        scrypt_N_1_1_256((const char*)vch.data(), (char*)&thash, 1024);
-        return thash;
-    }*/ else {
+    else {
         std::vector<unsigned char> vch(80); // block header size in bytes
         CVectorWriter ss(SER_NETWORK, PROTOCOL_VERSION, vch, 0);
         ss << *this;
@@ -37,10 +30,15 @@ uint256 CBlockHeader::GetPoWHash() const
     std::vector<unsigned char> vch(80); // block header size in bytes
     CVectorWriter ss(SER_NETWORK, PROTOCOL_VERSION, vch, 0);
     ss << *this;
-    if (GetAlgo(nVersion) == ALGO_POW_SCRYPT_SQUARED) {
+    const int algo = GetAlgo(nVersion);
+    if (algo == ALGO_POW_SCRYPT_SQUARED) {
         uint256 thash;
-        scrypt_N_1_1_256((const char*)vch.data(), (char*)&thash, 1048576);
+        scrypt_N_1_1_256((const char*)vch.data(), (char*)&thash, 1048576); // Scrypt²
         return thash;
+    } else if (algo == ALGO_POW_SHA1D) {
+        return Hash1((const char*)vch.data(), (const char*)vch.data() + vch.size());
+    } else if (algo == ALGO_POW_ARGON2D) {
+        return HashArgon2d((const char*)vch.data(), (const char*)vch.data() + vch.size());
     } else
         return HashQuark((const char*)vch.data(), (const char*)vch.data() + vch.size());
 }

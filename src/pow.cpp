@@ -208,7 +208,7 @@ unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlo
     int64_t nActualTimespan = pindexPrev->GetBlockTime() - pindex->GetBlockTime();
     int64_t nTargetTimespan = nPastBlocks * nTargetSpacing;
     // Respond faster by avoiding tempering when nActualTimespan is very small
-    if (nActualTimespan <= nTargetTimespan / 5)
+    if (nActualTimespan <= nTargetTimespan / 3)
         fUseTempering = false;
 
     // Note we did not use MTP to calculate nActualTimespan here, which enables the time warp attack to drop the difficulty to zero using timestamps in the past due to the timespan limit below

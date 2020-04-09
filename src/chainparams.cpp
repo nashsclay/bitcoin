@@ -122,6 +122,8 @@ public:
         consensus.powLimit[CBlockHeader::ALGO_POS] = uint256S("00000fffff000000000000000000000000000000000000000000000000000000"); // 0x1e0fffff
         consensus.powLimit[CBlockHeader::ALGO_POW_QUARK] = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000"); // 0x1f00ffff
         consensus.powLimit[CBlockHeader::ALGO_POW_SCRYPT_SQUARED] = uint256S("001fffff00000000000000000000000000000000000000000000000000000000"); // 0x1f1fffff
+        consensus.powLimit[CBlockHeader::ALGO_POW_SHA1D] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit[CBlockHeader::ALGO_POW_ARGON2D] = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000");
         consensus.nPowTargetTimespan = 3 * 60 * 60; // 3 hours
         consensus.nPowTargetSpacing = 80; // 80-second block spacing
         consensus.nStakeTimestampMask = 0xf; // 16 second time slots - normally, more than this wouldn't work with an 80 second block time because 80 isn't divisible by 32, but the effective PoS target spacing is 160 seconds due to hybrid PoW/PoS
@@ -267,8 +269,10 @@ public:
         consensus.SegwitHeight = 0; // 16e0228f2712c94c10ec590a98a416a664bdf42ebd10a6ffe563d817ee19b6b9
         consensus.MinBIP9WarningHeight = 0; // segwit activation height + miner confirmation window
         consensus.powLimit[CBlockHeader::ALGO_POS] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000");
-        consensus.powLimit[CBlockHeader::ALGO_POW_QUARK] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000"); // uint256S("00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.powLimit[CBlockHeader::ALGO_POW_SCRYPT_SQUARED] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit[CBlockHeader::ALGO_POW_QUARK] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit[CBlockHeader::ALGO_POW_SCRYPT_SQUARED] = uint256S("001fffff00000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit[CBlockHeader::ALGO_POW_SHA1D] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit[CBlockHeader::ALGO_POW_ARGON2D] = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000");
         consensus.nPowTargetTimespan = 3 * 60 * 60; // 3 hours
         consensus.nPowTargetSpacing = 64; // 64-second block spacing
         consensus.nStakeTimestampMask = 0xf; // 16 second time slots
@@ -393,6 +397,8 @@ public:
         consensus.powLimit[CBlockHeader::ALGO_POS] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
         consensus.powLimit[CBlockHeader::ALGO_POW_QUARK] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
         consensus.powLimit[CBlockHeader::ALGO_POW_SCRYPT_SQUARED] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit[CBlockHeader::ALGO_POW_SHA1D] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit[CBlockHeader::ALGO_POW_ARGON2D] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
         consensus.nPowTargetTimespan = 40 * 60; // 40 minutes
         consensus.nPowTargetSpacing = 32; // 32-second block spacing
         consensus.nStakeTimestampMask = 0x3; // 4 second time slots

@@ -327,6 +327,21 @@ std::string scrypt_detect_sse2()
 
 void scrypt_N_1_1_256(const char *input, char *output, unsigned int N)
 {
-    char *scratchpad = (char*)malloc((size_t)N * 128 + 63);
-    scrypt_N_1_1_256_sp(input, output, scratchpad, N);
+    if (N == 1024) {
+        static char *scratchpad = (char*)malloc((size_t)SCRYPT_SCRATCHPAD_SIZE); // Allocate memory once for the lifetime of the application
+        if (!scratchpad)
+            return;
+        scrypt_N_1_1_256_sp(input, output, scratchpad, 1024);
+    } else if (N == 1048576) {
+        static char *scratchpad = (char*)malloc((size_t)SCRYPT2_SCRATCHPAD_SIZE); // Allocate memory once for the lifetime of the application
+        if (!scratchpad)
+            return;
+        scrypt_N_1_1_256_sp(input, output, scratchpad, 1048576);
+    } else {
+        char *scratchpad = (char*)malloc((size_t)N * 128 + 63);
+        if (!scratchpad)
+            return;
+        scrypt_N_1_1_256_sp(input, output, scratchpad, N);
+        delete scratchpad;
+    }
 }

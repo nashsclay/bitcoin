@@ -9,8 +9,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-static const int SCRYPT_SCRATCHPAD_SIZE = 1024 * 128 + 63; // N = 1024
-static const int SCRYPT2_SCRATCHPAD_SIZE = 1048576 * 128 + 63; // N = 1024^2 = 1048576
+static const unsigned int SCRYPT_SCRATCHPAD_SIZE = 1024 * 128 + 63; // N = 1024
+static const unsigned int SCRYPT2_SCRATCHPAD_SIZE = 1048576 * 128 + 63; // N = 1024^2 = 1048576
 
 void scrypt_N_1_1_256(const char *input, char *output, unsigned int N);
 void scrypt_N_1_1_256_sp_generic(const char *input, char *output, char *scratchpad, unsigned int N);

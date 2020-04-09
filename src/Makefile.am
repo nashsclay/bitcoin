@@ -24,6 +24,8 @@ BITCOIN_INCLUDES=-I$(builddir) $(BDB_CPPFLAGS) $(BOOST_CPPFLAGS) $(LEVELDB_CPPFL
 BITCOIN_INCLUDES += -I$(srcdir)/secp256k1/include
 BITCOIN_INCLUDES += $(UNIVALUE_CFLAGS)
 
+ARGON2D_INCLUDES=-I$(srcdir)/crypto/argon2/include
+
 LIBBITCOIN_SERVER=libbitcoin_server.a
 LIBBITCOIN_COMMON=libbitcoin_common.a
 LIBBITCOIN_CONSENSUS=libbitcoin_consensus.a
@@ -398,7 +400,7 @@ libbitcoin_wallet_tool_a_SOURCES = \
   $(BITCOIN_CORE_H)
 
 # crypto primitives library
-crypto_libbitcoin_crypto_base_a_CPPFLAGS = $(AM_CPPFLAGS)
+crypto_libbitcoin_crypto_base_a_CPPFLAGS = $(AM_CPPFLAGS) $(ARGON2D_INCLUDES)
 crypto_libbitcoin_crypto_base_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 crypto_libbitcoin_crypto_base_a_SOURCES = \
   crypto/aes.cpp \
@@ -443,7 +445,19 @@ crypto_libbitcoin_crypto_base_a_SOURCES = \
   crypto/sph_keccak.h \
   crypto/skein.c \
   crypto/sph_skein.h \
-  crypto/sph_types.h
+  crypto/sph_types.h \
+## --- argon2 hash --- ##
+  crypto/argon2_best.c \
+  crypto/argon2/src/argon2.c \
+  crypto/argon2/include/argon2.h \
+  crypto/argon2/src/blake2/blake2b.c \
+  crypto/argon2/src/blake2/blake2.h \
+  crypto/argon2/src/core.c \
+  crypto/argon2/src/core.h \
+  crypto/argon2/src/encoding.c \
+  crypto/argon2/src/encoding.h \
+  crypto/argon2/src/thread.c \
+  crypto/argon2/src/thread.h
 
 if USE_ASM
 crypto_libbitcoin_crypto_base_a_SOURCES += crypto/sha256_sse4.cpp
@@ -696,7 +710,7 @@ endif
 
 libbitcoinconsensus_la_LDFLAGS = $(AM_LDFLAGS) -no-undefined $(RELDFLAGS)
 libbitcoinconsensus_la_LIBADD = $(LIBSECP256K1) $(CRYPTO_LIBS)
-libbitcoinconsensus_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(builddir)/obj -I$(srcdir)/secp256k1/include -DBUILD_BITCOIN_INTERNAL
+libbitcoinconsensus_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(builddir)/obj -I$(srcdir)/secp256k1/include -DBUILD_BITCOIN_INTERNAL $(ARGON2D_INCLUDES)
 libbitcoinconsensus_la_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 endif
@@ -707,6 +721,11 @@ CTAES_DIST += crypto/ctaes/ctaes.c
 CTAES_DIST += crypto/ctaes/ctaes.h
 CTAES_DIST += crypto/ctaes/README.md
 CTAES_DIST += crypto/ctaes/test.c
+
+ARGON2D_DIST = crypto/argon2/src/ref.c
+ARGON2D_DIST += crypto/argon2/src/opt.c
+ARGON2D_DIST += crypto/argon2/src/blake2/blamka-round-opt.h
+ARGON2D_DIST += crypto/argon2/src/blake2/blamka-round-ref.h
 
 CLEANFILES = $(EXTRA_LIBRARIES)
 
@@ -724,7 +743,7 @@ CLEANFILES += wallet/test/*.gcda wallet/test/*.gcno
 CLEANFILES += zmq/*.gcda zmq/*.gcno
 CLEANFILES += obj/build.h
 
-EXTRA_DIST = $(CTAES_DIST)
+EXTRA_DIST = $(CTAES_DIST) #$(ARGON2D_DIST)
 
 
 config/bitcoin-config.h: config/stamp-h1
