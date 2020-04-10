@@ -499,7 +499,7 @@ static UniValue burncoins(const JSONRPCRequest& request)
     // Comment
     CScript burnScript = CScript() << OP_RETURN;
     if (!request.params[1].isNull() && !request.params[1].get_str().empty()) {
-        // We can only support a string of up to 255 characters here instead of 256 (MAX_OP_RETURN_RELAY-3) because an extra length byte would be added by OP_PUSHDATA2, pushing us over the data carrier 259 byte limit by one
+        // We can only support a string of up to 640 characters here instead of 641 (MAX_OP_RETURN_RELAY-3) because an extra length byte is added by OP_PUSHDATA2
         if (request.params[1].get_str().length() > MAX_OP_RETURN_RELAY - 4)
             throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Comment cannot be longer than %u characters", MAX_OP_RETURN_RELAY - 4));
         burnScript << ToByteVector(request.params[1].get_str());
@@ -3697,7 +3697,7 @@ public:
             // Always report the pubkey at the top level, so that `getnewaddress()['pubkey']` always works.
             if (subobj.exists("pubkey")) obj.pushKV("pubkey", subobj["pubkey"]);
             obj.pushKV("embedded", std::move(subobj));
-        } else if (which_type == TX_MULTISIG) {
+        } else if (which_type == TX_MULTISIG || which_type == TX_MULTISIG_DATA) {
             // Also report some information on multisig scripts (which do not have a corresponding address).
             // TODO: abstract out the common functionality between this logic and ExtractDestinations.
             obj.pushKV("sigsrequired", solutions_data[0][0]);

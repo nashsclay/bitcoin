@@ -34,6 +34,7 @@ const char* GetTxnOutputType(txnouttype t)
     case TX_PUBKEYHASH: return "pubkeyhash";
     case TX_SCRIPTHASH: return "scripthash";
     case TX_MULTISIG: return "multisig";
+    case TX_MULTISIG_DATA: return "multisig_data";
     case TX_NULL_DATA: return "nulldata";
     case TX_WITNESS_V0_KEYHASH: return "witness_v0_keyhash";
     case TX_WITNESS_V0_SCRIPTHASH: return "witness_v0_scripthash";
@@ -58,7 +59,7 @@ static bool MatchPayToPubkey(const CScript& script, valtype& pubkey)
 static bool MatchPayToPubkeyHash(const CScript& script, valtype& pubkeyhash)
 {
     if (script.size() == 25 && script[0] == OP_DUP && script[1] == OP_HASH160 && script[2] == 20 && script[23] == OP_EQUALVERIFY && script[24] == OP_CHECKSIG) {
-        pubkeyhash = valtype(script.begin () + 3, script.begin() + 23);
+        pubkeyhash = valtype(script.begin() + 3, script.begin() + 23);
         return true;
     }
     return false;
@@ -76,6 +77,27 @@ static bool MatchMultisig(const CScript& script, unsigned int& required, std::ve
     valtype data;
     CScript::const_iterator it = script.begin();
     if (script.size() < 1 || script.back() != OP_CHECKMULTISIG) return false;
+
+    if (!script.GetOp(it, opcode, data) || !IsSmallInteger(opcode)) return false;
+    required = CScript::DecodeOP_N(opcode);
+    while (script.GetOp(it, opcode, data) && CPubKey::ValidSize(data)) {
+        pubkeys.emplace_back(std::move(data));
+    }
+    if (!IsSmallInteger(opcode)) return false;
+    unsigned int keys = CScript::DecodeOP_N(opcode);
+    if (pubkeys.size() != keys || keys < required) return false;
+    return (it + 1 == script.end());
+}
+
+static bool MatchMultisigData(const CScript& script, unsigned int& required, std::vector<valtype>& pubkeys)
+{
+    opcodetype opcode;
+    valtype data;
+    CScript::const_iterator it = script.begin();
+    if (script.size() < 1 || script.back() != OP_CHECKMULTISIG) return false;
+
+    if (!script.GetOp(it, opcode, data) || data.size() == 0 || data.size() > MAX_MULTISIG_DATA_OP_DROP_SIZE) return false;
+    if (!script.GetOp(it, opcode, data) || opcode != OP_DROP) return false;
 
     if (!script.GetOp(it, opcode, data) || !IsSmallInteger(opcode)) return false;
     required = CScript::DecodeOP_N(opcode);
@@ -149,6 +171,14 @@ txnouttype Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned 
         return TX_MULTISIG;
     }
 
+    keys.clear();
+    if (MatchMultisigData(scriptPubKey, required, keys)) {
+        vSolutionsRet.push_back({static_cast<unsigned char>(required)}); // safe as required is in range 1..16
+        vSolutionsRet.insert(vSolutionsRet.end(), keys.begin(), keys.end());
+        vSolutionsRet.push_back({static_cast<unsigned char>(keys.size())}); // safe as size is in range 1..16
+        return TX_MULTISIG_DATA;
+    }
+
     vSolutionsRet.clear();
     return TX_NONSTANDARD;
 }
@@ -192,6 +222,15 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
         unk.length = vSolutions[1].size();
         addressRet = unk;
         return true;
+    } else if (whichType == TX_MULTISIG || whichType == TX_MULTISIG_DATA) {
+        if (vSolutions.size() != 3 || vSolutions.front()[0] != 1 || vSolutions.back()[0] != 1)
+            return false;
+        CPubKey pubKey(vSolutions[1]);
+        if (!pubKey.IsValid())
+            return false;
+
+        addressRet = PKHash(pubKey);
+        return true;
     }
     // Multisig txns have more than one address...
     return false;
@@ -209,7 +248,7 @@ bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, std::
         return false;
     }
 
-    if (typeRet == TX_MULTISIG)
+    if (typeRet == TX_MULTISIG || typeRet == TX_MULTISIG_DATA)
     {
         nRequiredRet = vSolutions.front()[0];
         for (unsigned int i = 1; i < vSolutions.size()-1; i++)
