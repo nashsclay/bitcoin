@@ -809,7 +809,7 @@ bool DumpMempool(const CTxMemPool& pool);
 bool LoadMempool(CTxMemPool& pool);
 
 // peercoin:
-//bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache &view, uint64_t& nCoinAge); // peercoin: get transaction coin age
+bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache& view, unsigned int nTimeTx, int nHeightCurrent, uint64_t& nCoinAge); // peercoin: get transaction coin age
 //bool SignBlock(CBlock& block, const CWallet* pwallet);
 bool CheckBlockSignature(const CBlock& block);
 

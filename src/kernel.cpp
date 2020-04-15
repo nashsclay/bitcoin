@@ -444,12 +444,12 @@ bool GetKernelStakeModifier(CBlockIndex* pindexPrev, uint256 hashBlockFrom, unsi
 //   a proof-of-work situation.
 //
 // Instead of looping outside and reinitializing variables many times, we will give a nTimeTx and also search interval so that we can do all the hashing here
-bool CheckStakeKernelHash(const unsigned int& nBits, CBlockIndex* pindexPrev, const CBlockIndex* pindexFrom, const CTransactionRef& txPrev, const COutPoint& prevout, unsigned int& nTimeTx, unsigned int nHashDrift, bool fCheck, uint256& hashProofOfStake, bool fPrintProofOfStake)
+bool CheckStakeKernelHash(const unsigned int& nBits, CBlockIndex* pindexPrev, const CBlockIndex* pindexFrom, const CTxOut& prevTxOut, const COutPoint& prevout, unsigned int& nTimeTx, unsigned int nHashDrift, bool fCheck, uint256& hashProofOfStake, bool fPrintProofOfStake)
 {
     const Consensus::Params& params = Params().GetConsensus();
     int nHeightCurrent = pindexPrev->nHeight + 1;
     // Assign new variables to make it easier to read
-    int64_t nValueIn = txPrev->vout[prevout.n].nValue;
+    int64_t nValueIn = prevTxOut.nValue; //txPrev->vout[prevout.n].nValue;
     unsigned int nTimeBlockFrom = pindexFrom->GetBlockTime();
     int nHeightBlockFrom = pindexFrom->nHeight;
     int64_t nStakeMinAge = nHeightCurrent >= params.nMandatoryUpgradeBlock[1] ? params.nStakeMinAge[1] : params.nStakeMinAge[0];
@@ -555,43 +555,47 @@ bool CheckStakeKernelHash(const unsigned int& nBits, CBlockIndex* pindexPrev, co
 }
 
 // Check kernel hash target and coinstake signature
-bool CheckProofOfStake(CValidationState &state, CBlockIndex* pindexPrev, const CTransactionRef& tx, const unsigned int& nBits, unsigned int nTimeTx, uint256& hashProofOfStake)
+bool CheckProofOfStake(CValidationState& state, const CCoinsViewCache& view, CBlockIndex* pindexPrev, const CTransactionRef& tx, const unsigned int& nBits, unsigned int nTimeTx, uint256& hashProofOfStake)
 {
     if (!tx->IsCoinStake())
         return error("CheckProofOfStake() : called on non-coinstake %s", tx->GetHash().ToString());
 
     // Kernel (input 0) must match the stake hash target per coin age (nBits)
-    const CTxIn& txin = tx->vin[0];
+    const COutPoint& prevout = tx->vin[0].prevout;
+    Coin coin;
+
+    if (!view.GetCoin(prevout, coin))
+        return error("%s : previous transaction not in main chain", __func__);
 
     // Transaction index is required to get to block header
     //if (!fTxIndex)
         //return error("CheckProofOfStake() : transaction index not available");
 
     // Get transaction index for the previous transaction
-    const Consensus::Params& params = Params().GetConsensus();
-    uint256 hashBlock;
-    CTransactionRef txPrev;
-    if (!GetTransaction(txin.prevout.hash, txPrev, params, hashBlock, true, nullptr))
-        return error("CheckProofOfStake() : tx index not found");  // tx index not found
+    //uint256 hashBlock;
+    //CTransactionRef txPrev;
+    //if (!GetTransaction(prevout.hash, txPrev, Params().GetConsensus(), hashBlock, true, nullptr))
+        //return error("CheckProofOfStake() : tx index not found");  // tx index not found
 
     // Read txPrev and header of its block
-    const CBlockIndex* pindexFrom = LookupBlockIndex(hashBlock);
+    //const CBlockIndex* pindexFrom = LookupBlockIndex(hashBlock);
+    const CBlockIndex* pindexFrom = ::ChainActive()[coin.nHeight];
     if (!pindexFrom)
         return error("CheckProofOfStake() : block index not found");
 
     // Verify signature
     {
         int nIn = 0;
-        const CTxOut& prevOut = txPrev->vout[tx->vin[nIn].prevout.n];
-        TransactionSignatureChecker checker(&(*tx), nIn, prevOut.nValue, PrecomputedTransactionData(*tx));
+        //const CTxOut& prevTxOut = txPrev->vout[tx->vin[nIn].prevout.n];
+        TransactionSignatureChecker checker(&(*tx), nIn, coin.out.nValue, PrecomputedTransactionData(*tx));
         ScriptError serror = SCRIPT_ERR_OK;
 
-        if (!VerifyScript(tx->vin[nIn].scriptSig, prevOut.scriptPubKey, &(tx->vin[nIn].scriptWitness), STANDARD_SCRIPT_VERIFY_FLAGS, checker, &serror))
+        if (!VerifyScript(tx->vin[nIn].scriptSig, coin.out.scriptPubKey, &(tx->vin[nIn].scriptWitness), STANDARD_SCRIPT_VERIFY_FLAGS, checker, &serror))
             return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "invalid-pos-script", strprintf("%s: VerifyScript failed on coinstake %s, %s", __func__, tx->GetHash().ToString(), ScriptErrorString(serror)));
     }
 
     unsigned int nInterval = 0;
-    if (!CheckStakeKernelHash(nBits, pindexPrev, pindexFrom, txPrev, txin.prevout, nTimeTx, nInterval, true, hashProofOfStake, gArgs.GetBoolArg("-debug", false)))
+    if (!CheckStakeKernelHash(nBits, pindexPrev, pindexFrom, coin.out, prevout, nTimeTx, nInterval, true, hashProofOfStake, gArgs.GetBoolArg("-debug", false)))
         return error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s", tx->GetHash().ToString(), hashProofOfStake.ToString()); // may occur during initial download or if behind on block chain sync
 
     return true;

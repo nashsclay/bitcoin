@@ -6,6 +6,7 @@
 #ifndef BITCOIN_COINS_H
 #define BITCOIN_COINS_H
 
+#include <chainparams.h>
 #include <primitives/transaction.h>
 #include <compressor.h>
 #include <core_memusage.h>
@@ -43,19 +44,23 @@ public:
     // peercoin: whether transaction is a coinstake
     unsigned int fCoinStake : 1;
 
+    // peercoin: transaction timestamp
+    unsigned int nTime = 0;
+
     //! construct a Coin from a CTxOut and height/coinbase information.
-    Coin(CTxOut&& outIn, int nHeightIn, bool fCoinBaseIn, bool fCoinStakeIn) : out(std::move(outIn)), fCoinBase(fCoinBaseIn), nHeight(nHeightIn), fCoinStake(fCoinStakeIn) {}
-    Coin(const CTxOut& outIn, int nHeightIn, bool fCoinBaseIn, bool fCoinStakeIn) : out(outIn), fCoinBase(fCoinBaseIn), nHeight(nHeightIn), fCoinStake(fCoinStakeIn) {}
+    Coin(CTxOut&& outIn, int nHeightIn, bool fCoinBaseIn, bool fCoinStakeIn, int nTimeIn) : out(std::move(outIn)), fCoinBase(fCoinBaseIn), nHeight(nHeightIn), fCoinStake(fCoinStakeIn), nTime(nTimeIn) {}
+    Coin(const CTxOut& outIn, int nHeightIn, bool fCoinBaseIn, bool fCoinStakeIn, int nTimeIn) : out(outIn), fCoinBase(fCoinBaseIn), nHeight(nHeightIn), fCoinStake(fCoinStakeIn), nTime(nTimeIn) {}
 
     void Clear() {
         out.SetNull();
         fCoinBase = false;
         nHeight = 0;
         fCoinStake = false;
+        nTime = 0;
     }
 
     //! empty constructor
-    Coin() : fCoinBase(false), nHeight(0), fCoinStake(false) { }
+    Coin() : fCoinBase(false), nHeight(0), fCoinStake(false), nTime(0) { }
 
     bool IsCoinBase() const {
         return fCoinBase;
@@ -73,6 +78,9 @@ public:
         code[31] = fCoinBase;
         ::Serialize(s, VARINT(code.to_ulong()));
         ::Serialize(s, CTxOutCompressor(REF(out)));
+        // peercoin transaction timestamp
+        if (nHeight < Params().GetConsensus().nMandatoryUpgradeBlock[0])
+            ::Serialize(s, VARINT(nTime));
     }
 
     template<typename Stream>
@@ -86,6 +94,9 @@ public:
         bitset.reset(31);
         nHeight = bitset.to_ulong();
         ::Unserialize(s, CTxOutCompressor(out));
+        // peercoin transaction timestamp
+        if (nHeight < Params().GetConsensus().nMandatoryUpgradeBlock[0])
+            ::Unserialize(s, VARINT(nTime));
     }
 
     bool IsSpent() const {

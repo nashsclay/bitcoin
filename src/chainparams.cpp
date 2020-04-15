@@ -123,8 +123,8 @@ public:
         consensus.powLimit[CBlockHeader::ALGO_POW_QUARK] = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000"); // 0x1f00ffff
         consensus.powLimit[CBlockHeader::ALGO_POW_SCRYPT_SQUARED] = uint256S("001fffff00000000000000000000000000000000000000000000000000000000"); // 0x1f1fffff
         consensus.powLimit[CBlockHeader::ALGO_POW_SHA1D] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000");
-        consensus.powLimit[CBlockHeader::ALGO_POW_ARGON2D] = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000");
-        consensus.nPowTargetTimespan = 3 * 60 * 60; // 3 hours
+        consensus.powLimit[CBlockHeader::ALGO_POW_ARGON2D] = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000"); // 0x1f00ffff
+        consensus.nPowTargetTimespan = 2 * 60 * 60; // 2 hours
         consensus.nPowTargetSpacing = 80; // 80-second block spacing
         consensus.nStakeTimestampMask = 0xf; // 16 second time slots - normally, more than this wouldn't work with an 80 second block time because 80 isn't divisible by 32, but the effective PoS target spacing is 160 seconds due to hybrid PoW/PoS
         consensus.nStakeMinDepth[0] = 200;
@@ -212,10 +212,14 @@ public:
                 { 600000, uint256S("0x5698cbf27f591da46ababc40c9ed7718086493e3542c00c35a6de86de6b6add6")},
                 { 650000, uint256S("0xcf6076eda981af1097e52f505c0c3dfefc60af9b93ba674fda8e22235ff50df3")},
                 { 700000, uint256S("0x2f852dfbc9b767905400c0e706ff63eca8d5e4090d4d49f873f9be1a754cc243")},
+                { 750000, uint256S("0xc723e552d2287dc1309d33ded2b722beb2fe08ec5eaa0a95c63de2ea12aee150")},
+                { 800000, uint256S("0xa27bf851d7055180d0f94593862a8a68a176d40bc3218427c26cc7d4ac050bb7")},
+                { 850000, uint256S("0x94efaa5b8397bb0fa5c63cf211551e94f9cb21bb18c3fb0e15f798614cd9d6a6")},
+                { 900000, uint256S("0x8dd45153002324052253321454138627161a91982185a578940307ed45193635")},
                 { 950000, uint256S("0x0cbb4dfac570e6cbf7aa10b3f8a138b3dda3e908ab78e301f12354731bbce560")},
-                {1030000, uint256S("0x6435fc65c4b7dc50bf254124884d7787c99451b2fe8b604c5a8435849beba1f5")},
-                {1040000, uint256S("0xa8212fbda825a42ecd3a0d1251437626fbde53afc1ea4eea76d05b4898718a0f")},
+                {1000000, uint256S("0xda2636057aa54f047fddb79a6d71617ac075c59c26c84761585735b4e5978f3c")},
                 {1050000, uint256S("0x9ab97fa25881e95b4c22fb7515d90738054a43231231acf8d5fc3be581591192")},
+                {1100000, uint256S("0x8aecf2e9d02460c3a97d83a178bf6f9f81684e2df1f95d8cd9dea1ae780b814e")},
                 {1110000, uint256S("0x442f3ff725f9128bb432cac6e4c312c31548a646bacb933ff80fc214aea09eff")},
             }
         };
@@ -273,7 +277,7 @@ public:
         consensus.powLimit[CBlockHeader::ALGO_POW_SCRYPT_SQUARED] = uint256S("001fffff00000000000000000000000000000000000000000000000000000000");
         consensus.powLimit[CBlockHeader::ALGO_POW_SHA1D] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000");
         consensus.powLimit[CBlockHeader::ALGO_POW_ARGON2D] = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000");
-        consensus.nPowTargetTimespan = 3 * 60 * 60; // 3 hours
+        consensus.nPowTargetTimespan = 2 * 60 * 60; // 2 hours
         consensus.nPowTargetSpacing = 64; // 64-second block spacing
         consensus.nStakeTimestampMask = 0xf; // 16 second time slots
         consensus.nStakeMinDepth[0] = 100;
@@ -399,7 +403,7 @@ public:
         consensus.powLimit[CBlockHeader::ALGO_POW_SCRYPT_SQUARED] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
         consensus.powLimit[CBlockHeader::ALGO_POW_SHA1D] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
         consensus.powLimit[CBlockHeader::ALGO_POW_ARGON2D] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
-        consensus.nPowTargetTimespan = 40 * 60; // 40 minutes
+        consensus.nPowTargetTimespan = 2 * 60 * 60; // 2 hours
         consensus.nPowTargetSpacing = 32; // 32-second block spacing
         consensus.nStakeTimestampMask = 0x3; // 4 second time slots
         consensus.nStakeMinDepth[0] = 0;

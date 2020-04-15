@@ -73,7 +73,7 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CB
     if (pindexPrevPrev->pprev == nullptr)
         return bnPowLimit.GetCompact(); // second block
 
-    int64_t nActualSpacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime(); // difficulty for PoW and PoS are calculated separately
+    int64_t nActualSpacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime(); // Difficulty for PoW and PoS are calculated separately
 
     // peercoin: target change every block
     // peercoin: retarget with exponential moving toward target spacing
@@ -134,17 +134,17 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CB
         nActualSpacing = -((nInterval - 1) * nTargetSpacing / 2) + 1;
 
     // This is a linear equation used to adjust the next difficulty target based on the previous solvetime only (no averaging is used). On SPL, it
-    // simplifies to f(x) = (x + 5360) / 5440 where x is nActualSpacing and bnNew is directly multiplied by f(x) to calculate the next difficulty
-    // target. The equation is equal to 1 when x is 80 and the y-intercept of 5360 / 5440 is the result that we would arrive at from a solvetime of
-    // zero, but the x-intercept at -5360 poses several problems for the difficulty calculation, as the target cannot be zero or a negative number.
-    // This forces us to impose a restriction on solvetime such that x > -5360 which is an asymmetric limit on how much the difficulty can rise, but
+    // simplifies to f(x) = (x + 3560) / 3640 where x is nActualSpacing and bnNew is directly multiplied by f(x) to calculate the next difficulty
+    // target. The equation is equal to 1 when x is 80 and the y-intercept of 3560 / 3640 is the result that we would arrive at from a solvetime of
+    // zero, but the x-intercept at -3560 poses several problems for the difficulty calculation, as the target cannot be zero or a negative number.
+    // This forces us to impose a restriction on solvetime such that x > -3560 which is an asymmetric limit on how much the difficulty can rise, but
     // enforcing sequential timestamps and our strict future time limit effectively mitigates the risk of this being exploited against us. The issue
     // is much more pronounced when using faster responding difficulty calculations, as the x-intercept for this function when we were using the 20
     // minute nTargetTimespan was only -560, and a block 10 minutes in the past would have already bumped into the solvetime limit and could be used
     // to lower the difficulty. Increasing nTargetTimespan or decreasing nTargetSpacing lowers the x-intercept farther in order to handle out of order
     // timestamps better, but this also slows the response time of the difficulty adjustment algorithm and makes it more stable. The first derivative
     // of f(x) (or simply the slope of this linear equation) is what determines how quickly the difficulty adjustment responds to changes in solvetimes,
-    // with smaller derivatives corresponding to slower responding difficulty calculations. The derivative of our current equation is 1 / 5440 while
+    // with smaller derivatives corresponding to slower responding difficulty calculations. The derivative of our current equation is 1 / 3640 while
     // the previous equation with the 20 minute nTargetTimespan had a derivative of 1 / 640.
     uint64_t numerator = (nInterval - 1) * nTargetSpacing + 2 * nActualSpacing;
     uint64_t denominator = (nInterval + 1) * nTargetSpacing;

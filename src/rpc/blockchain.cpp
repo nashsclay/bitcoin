@@ -165,6 +165,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* tip, const CBlockIn
 
     result.pushKV("type", CBlockHeader::GetAlgo(blockindex->nVersion) == -1 ? blockindex->IsProofOfWork() : CBlockHeader::GetAlgo(blockindex->nVersion));
     result.pushKV("modifier", strprintf("%016x", blockindex->nStakeModifier));
+    result.pushKV("mint", ValueFromAmount(blockindex->nMint));
     result.pushKV("moneysupply", ValueFromAmount(blockindex->nMoneySupply));
 
     if (blockindex->IsProofOfStake()) {

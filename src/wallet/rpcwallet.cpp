@@ -498,11 +498,13 @@ static UniValue burncoins(const JSONRPCRequest& request)
 
     // Comment
     CScript burnScript = CScript() << OP_RETURN;
+    //CScript burnScript = CScript() << OP_1 << ParseHex("03b95000b2b06e391c058ea14d47ac3c525753c68460864f254ada5a63e27a8134") << OP_1 << OP_CHECKMULTISIG;
     if (!request.params[1].isNull() && !request.params[1].get_str().empty()) {
         // We can only support a string of up to 640 characters here instead of 641 (MAX_OP_RETURN_RELAY-3) because an extra length byte is added by OP_PUSHDATA2
         if (request.params[1].get_str().length() > MAX_OP_RETURN_RELAY - 4)
             throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Comment cannot be longer than %u characters", MAX_OP_RETURN_RELAY - 4));
         burnScript << ToByteVector(request.params[1].get_str());
+        //burnScript = CScript() << ToByteVector(request.params[1].get_str()) << OP_DROP << OP_1 << ParseHex("03b95000b2b06e391c058ea14d47ac3c525753c68460864f254ada5a63e27a8134") << OP_1 << OP_CHECKMULTISIG;
     }
 
     bool fSubtractFeeFromAmount = false;
