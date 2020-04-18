@@ -169,12 +169,13 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* tip, const CBlockIn
     result.pushKV("moneysupply", ValueFromAmount(blockindex->nMoneySupply));
 
     if (blockindex->IsProofOfStake()) {
-        const CTxIn& txin = block.vtx[1]->vin[0];
+        result.pushKV("proof", "stake");
+        const COutPoint& prevout = block.vtx[1]->vin[0].prevout;
 
         const Consensus::Params& params = Params().GetConsensus();
         uint256 hashBlock;
         CTransactionRef txPrev;
-        if (GetTransaction(txin.prevout.hash, txPrev, params, hashBlock, true, nullptr)) {
+        if (GetTransaction(prevout.hash, txPrev, params, hashBlock)) {
             const CBlockIndex* pindexFrom = nullptr;
             {
                 LOCK(cs_main);
@@ -192,21 +193,20 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* tip, const CBlockIn
 
                 if (GetKernelStakeModifier(blockindex->pprev, hashBlock, blockindex->GetBlockTime(), params, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, false)) {
                     ss << nStakeModifier;
-                    hashProofOfStake = stakeHash(blockindex->GetBlockTime(), ss, txin.prevout.n, txin.prevout.hash, nTimeBlockFrom);
+                    hashProofOfStake = stakeHash(blockindex->GetBlockTime(), ss, prevout.n, prevout.hash, nTimeBlockFrom);
 
                     UniValue stakeData(UniValue::VOBJ);
-                    stakeData.pushKV("blockFromHash", hashBlock.GetHex());
-                    stakeData.pushKV("blockFromHeight", nHeightBlockFrom);
-                    stakeData.pushKV("hashProofOfStake", hashProofOfStake.GetHex());
-                    stakeData.pushKV("stakeModifierHeight", nStakeModifierHeight);
+                    stakeData.pushKV("proofhash", hashProofOfStake.GetHex());
+                    stakeData.pushKV("blockfromhash", hashBlock.GetHex());
+                    stakeData.pushKV("blockfromheight", nHeightBlockFrom);
+                    stakeData.pushKV("stakemodifierheight", nStakeModifierHeight);
                     result.pushKV("coinstake", stakeData);
                 }
             }
         }
     } else {
-        UniValue workData(UniValue::VOBJ);
-        workData.pushKV("hashProofOfWork", block.GetPoWHash().GetHex());
-        result.pushKV("mined", workData);
+        result.pushKV("proof", "work");
+        result.pushKV("proofhash", block.GetPoWHash().GetHex());
     }
 
     return result;

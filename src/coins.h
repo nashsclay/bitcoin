@@ -39,7 +39,7 @@ public:
     unsigned int fCoinBase : 1;
 
     //! at which height this containing transaction was included in the active block chain
-    uint32_t nHeight : 30;
+    unsigned int nHeight : 30;
 
     // peercoin: whether transaction is a coinstake
     unsigned int fCoinStake : 1;
@@ -73,10 +73,10 @@ public:
     template<typename Stream>
     void Serialize(Stream &s) const {
         assert(!IsSpent());
-        std::bitset<32> code(nHeight);
-        code[30] = fCoinStake;
-        code[31] = fCoinBase;
-        ::Serialize(s, VARINT(code.to_ulong()));
+        std::bitset<32> nCode(nHeight);
+        nCode[30] = fCoinStake;
+        nCode[31] = fCoinBase;
+        ::Serialize(s, VARINT(nCode.to_ulong()));
         ::Serialize(s, CTxOutCompressor(REF(out)));
         // peercoin transaction timestamp
         if (nHeight < Params().GetConsensus().nMandatoryUpgradeBlock[0])
@@ -85,11 +85,11 @@ public:
 
     template<typename Stream>
     void Unserialize(Stream &s) {
-        uint32_t code = 0;
-        ::Unserialize(s, VARINT(code));
-        std::bitset<32> bitset(code);
-        fCoinBase = bitset[31];
+        unsigned int nCode = 0;
+        ::Unserialize(s, VARINT(nCode));
+        std::bitset<32> bitset(nCode);
         fCoinStake = bitset[30];
+        fCoinBase = bitset[31];
         bitset.reset(30);
         bitset.reset(31);
         nHeight = bitset.to_ulong();

@@ -175,11 +175,11 @@ extern bool fPruneMode;
 /** Number of MiB of block files that we're trying to stay below. */
 extern uint64_t nPruneTarget;
 /** Block files containing a block-height within MIN_BLOCKS_TO_KEEP of ::ChainActive().Tip() will not be pruned. */
-static const unsigned int MIN_BLOCKS_TO_KEEP = 2160;
+static const unsigned int MIN_BLOCKS_TO_KEEP = 2160; // Number of blocks in the past two days
 /** Minimum blocks required to signal NODE_NETWORK_LIMITED */
 static const unsigned int NODE_NETWORK_LIMITED_MIN_BLOCKS = 2160;
 
-static const signed int DEFAULT_CHECKBLOCKS = 6;
+static const signed int DEFAULT_CHECKBLOCKS = 45; // Number of blocks in the past hour
 static const unsigned int DEFAULT_CHECKLEVEL = 4;
 
 // Require that user allocate at least 550 MiB for block & undo files (blk???.dat and rev???.dat)
@@ -190,7 +190,7 @@ static const unsigned int DEFAULT_CHECKLEVEL = 4;
 // full block file chunks, we need the high water mark which triggers the prune to be
 // one 128MB block file + added 15% undo data = 147MB greater for a total of 545MB
 // Setting the target to >= 550 MiB will make it likely we can respect the target.
-static const uint64_t MIN_DISK_SPACE_FOR_BLOCK_FILES = 2048ULL * 1024 * 1024;
+static const uint64_t MIN_DISK_SPACE_FOR_BLOCK_FILES = 2048ull * 1024 * 1024;
 
 /**
  * Process an incoming block. This only returns after the best known valid
@@ -244,7 +244,7 @@ void UnloadBlockIndex();
 /** Run an instance of the script checking thread */
 void ThreadScriptCheck(int worker_num);
 /** Retrieve a transaction (from memory pool, or from disk, if possible) */
-bool GetTransaction(const uint256& hash, CTransactionRef& tx, const Consensus::Params& params, uint256& hashBlock, bool fAllowSlow, const CBlockIndex* const blockIndex); //bool fAllowSlow = false, const CBlockIndex* const blockIndex = nullptr); TODO
+bool GetTransaction(const uint256& hash, CTransactionRef& tx, const Consensus::Params& params, uint256& hashBlock, const CBlockIndex* const block_index = nullptr);
 /**
  * Find the best known block, and make it the tip of the block chain
  *
@@ -809,7 +809,7 @@ bool DumpMempool(const CTxMemPool& pool);
 bool LoadMempool(CTxMemPool& pool);
 
 // peercoin:
-bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache& view, unsigned int nTimeTx, int nHeightCurrent, uint64_t& nCoinAge); // peercoin: get transaction coin age
+bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache& view, unsigned int nTimeTx, int nHeightCurrent, uint64_t& nCoinAge, const CBlockIndex* pindexFrom = nullptr); // peercoin: get transaction coin age
 //bool SignBlock(CBlock& block, const CWallet* pwallet);
 bool CheckBlockSignature(const CBlock& block);
 

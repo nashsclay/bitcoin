@@ -283,7 +283,7 @@ uint64_t ComputeStakeModifierV2(const CBlockIndex* pindexPrev, const uint256& ke
 // modifier that is (nStakeMinAge minus a selection interval) earlier than the
 // stake, thus at least a selection interval later than the coin generating the
 // kernel, as the generating coin is from at least nStakeMinAge ago.
-static bool GetKernelStakeModifierV05(CBlockIndex* pindexPrev, unsigned int nTimeTx, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
+static bool GetKernelStakeModifierV05(const CBlockIndex* pindexPrev, unsigned int nTimeTx, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
 {
     //const Consensus::Params& params = Params().GetConsensus();
     const CBlockIndex* pindex = pindexPrev;
@@ -326,7 +326,7 @@ static bool GetKernelStakeModifierV05(CBlockIndex* pindexPrev, unsigned int nTim
 // This stake kernel is vulnerable to grinding because the selected stake modifier for a given input will never change, so
 // the input can be resent in an attempt to get a more favorable kernel if it is determined that the input will not produce
 // a stake (generate a small enough hashProofOfStake) within a reasonable amount of time (nTimeTx not too far in the future)
-static bool GetKernelStakeModifierV03(CBlockIndex* pindexPrev, uint256 hashBlockFrom, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
+static bool GetKernelStakeModifierV03(const CBlockIndex* pindexPrev, uint256 hashBlockFrom, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
 {
     //const Consensus::Params& params = Params().GetConsensus();
     nStakeModifier = 0;
@@ -342,10 +342,10 @@ static bool GetKernelStakeModifierV03(CBlockIndex* pindexPrev, uint256 hashBlock
     // So, we construct a temporary chain that we will iterate over.
     // pindexFrom - this block contains coins that are used to generate PoS
     // pindexPrev - this is a block that is previous to PoS block that we are checking, you can think of it as tip of our chain
-    std::vector<CBlockIndex*> tmpChain;
+    std::vector<const CBlockIndex*> tmpChain;
     int32_t nDepth = pindexPrev->nHeight - (pindexFrom->nHeight-1); // -1 is used to also include pindexFrom
     tmpChain.reserve(nDepth);
-    CBlockIndex* it = pindexPrev;
+    const CBlockIndex* it = pindexPrev;
     for (int i=1; i<=nDepth && !::ChainActive().Contains(it); i++) {
         tmpChain.push_back(it);
         it = it->pprev;
@@ -395,7 +395,7 @@ bool stakeTargetHit(const uint256& hashProofOfStake, int64_t nValueIn, const ari
 }
 
 // Get the stake modifier specified by the protocol to hash for a stake kernel
-bool GetKernelStakeModifier(CBlockIndex* pindexPrev, uint256 hashBlockFrom, unsigned int nTimeTx, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
+bool GetKernelStakeModifier(const CBlockIndex* pindexPrev, uint256 hashBlockFrom, unsigned int nTimeTx, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
 {
     // Hash the modifier - PIVX
     /*if (Params().IsStakeModifierV2(pindexPrev->nHeight + 1)) {
@@ -444,7 +444,7 @@ bool GetKernelStakeModifier(CBlockIndex* pindexPrev, uint256 hashBlockFrom, unsi
 //   a proof-of-work situation.
 //
 // Instead of looping outside and reinitializing variables many times, we will give a nTimeTx and also search interval so that we can do all the hashing here
-bool CheckStakeKernelHash(const unsigned int& nBits, CBlockIndex* pindexPrev, const CBlockIndex* pindexFrom, const CTxOut& prevTxOut, const COutPoint& prevout, unsigned int& nTimeTx, unsigned int nHashDrift, bool fCheck, uint256& hashProofOfStake, bool fPrintProofOfStake)
+bool CheckStakeKernelHash(const unsigned int& nBits, const CBlockIndex* pindexPrev, const CBlockIndex* pindexFrom, const CTxOut& prevTxOut, const COutPoint& prevout, unsigned int& nTimeTx, unsigned int nHashDrift, bool fCheck, uint256& hashProofOfStake, bool fPrintProofOfStake)
 {
     const Consensus::Params& params = Params().GetConsensus();
     int nHeightCurrent = pindexPrev->nHeight + 1;
@@ -555,7 +555,7 @@ bool CheckStakeKernelHash(const unsigned int& nBits, CBlockIndex* pindexPrev, co
 }
 
 // Check kernel hash target and coinstake signature
-bool CheckProofOfStake(CValidationState& state, const CCoinsViewCache& view, CBlockIndex* pindexPrev, const CTransactionRef& tx, const unsigned int& nBits, unsigned int nTimeTx, uint256& hashProofOfStake)
+bool CheckProofOfStake(CValidationState& state, const CCoinsViewCache& view, const CBlockIndex* pindexPrev, const CTransactionRef& tx, const unsigned int& nBits, unsigned int nTimeTx, uint256& hashProofOfStake)
 {
     if (!tx->IsCoinStake())
         return error("CheckProofOfStake() : called on non-coinstake %s", tx->GetHash().ToString());
@@ -574,7 +574,7 @@ bool CheckProofOfStake(CValidationState& state, const CCoinsViewCache& view, CBl
     // Get transaction index for the previous transaction
     //uint256 hashBlock;
     //CTransactionRef txPrev;
-    //if (!GetTransaction(prevout.hash, txPrev, Params().GetConsensus(), hashBlock, true, nullptr))
+    //if (!GetTransaction(prevout.hash, txPrev, Params().GetConsensus(), hashBlock))
         //return error("CheckProofOfStake() : tx index not found");  // tx index not found
 
     // Read txPrev and header of its block

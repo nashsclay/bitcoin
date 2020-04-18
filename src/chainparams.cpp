@@ -54,7 +54,7 @@ static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesi
             break;
         }
         genesis.nNonce += 1;
-        if ((genesis.nNonce & 0xffff) == 0)
+        if ((genesis.nNonce & 0x1ffff) == 0)
             printf("testing nonce: %u\n", genesis.nNonce);
     }*/
     uint256 hash = genesis.GetPoWHash();
@@ -133,7 +133,7 @@ public:
         consensus.nStakeMinAge[1] = 12 * 60 * 60; // current minimum age for coin age is 12 hours
         consensus.nStakeMaxAge = 30 * 24 * 60 * 60;
         consensus.nModifierInterval = 1 * 60; // Modifier interval: time to elapse before new modifier is computed
-        consensus.fPowAllowMinDifficultyBlocks = false;
+        consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.fPowNoRetargeting = false;
         consensus.nRuleChangeActivationThreshold = 0.95 * 7 * 24 * 60 * 60 / consensus.nPowTargetSpacing; // 95% of the blocks in the past week
         consensus.nMinerConfirmationWindow = 7 * 24 * 60 * 60 / consensus.nPowTargetSpacing; // nPowTargetTimespan / nPowTargetSpacing
@@ -413,7 +413,7 @@ public:
         consensus.nStakeMaxAge = 30 * 24 * 60 * 60;
         consensus.nModifierInterval = 1 * 60; // Modifier interval: time to elapse before new modifier is computed
         consensus.fPowAllowMinDifficultyBlocks = true;
-        consensus.fPowNoRetargeting = true;
+        consensus.fPowNoRetargeting = false; //true;
         consensus.nRuleChangeActivationThreshold = 0.75 * 24 * 60 * 60 / consensus.nPowTargetSpacing; // 75% for testchains
         consensus.nMinerConfirmationWindow = 24 * 60 * 60 / consensus.nPowTargetSpacing; // Faster than normal for regtest (one day instead of one week)
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;

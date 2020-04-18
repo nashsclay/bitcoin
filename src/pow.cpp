@@ -15,14 +15,14 @@
 // peercoin: find last block index up to pindex
 const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake)
 {
-    while (pindex && pindex->pprev && (pindex->IsProofOfStake() != fProofOfStake))
+    while (pindex && pindex->pprev && pindex->IsProofOfStake() != fProofOfStake)
         pindex = pindex->pprev;
     return pindex;
 }
 
 const CBlockIndex* GetLastBlockIndexForAlgo(const CBlockIndex* pindex, int algo)
 {
-    while (pindex && pindex->pprev && (CBlockHeader::GetAlgo(pindex->nVersion) != algo))
+    while (pindex && pindex->pprev && CBlockHeader::GetAlgo(pindex->nVersion) != algo)
         pindex = pindex->pprev;
     return pindex;
 }
@@ -31,31 +31,36 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
 {
     const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
     const unsigned int nProofOfWorkLimit = UintToArith256(params.powLimit[algo == -1 ? CBlockHeader::ALGO_POW_QUARK : algo]).GetCompact();
-    if (pindexLast == nullptr /*|| params.fPowNoRetargeting*/)
+    if (pindexLast == nullptr || params.fPowNoRetargeting)
         return nProofOfWorkLimit;
 
-    if (params.fPowAllowMinDifficultyBlocks) {
-        // Special difficulty rule for testnet:
-        // If the new block's timestamp is more than 2* 10 minutes
+    if (pindexLast->nHeight+1 >= params.nMandatoryUpgradeBlock[1] && params.fPowAllowMinDifficultyBlocks && algo != -1) {
+        // Special difficulty rule:
+        // If the new block's timestamp is more than 4 hours
         // then allow mining of a min-difficulty block.
-        /*if (pblock->GetBlockTime() > pindexLast->GetBlockTime() + (20*60))
+        const CBlockIndex* pindexPrev = GetLastBlockIndexForAlgo(pindexLast, algo);
+        if (pindexPrev->nHeight > 10 && pblock->GetBlockTime() > pindexPrev->GetBlockTime() + (4*60*60))
             return nProofOfWorkLimit;
-        if (pindexLast->pprev && pindexLast->nBits == nProofOfWorkLimit) { TODO
+        if (pindexPrev->pprev && pindexPrev->nBits == nProofOfWorkLimit) {
             // Return the block before the last non-special-min-difficulty-rules-block
-            const CBlockIndex* pindex = pindexLast;
-            while (pindex->pprev && pindex->nBits == nProofOfWorkLimit)
+            const CBlockIndex* pindex = pindexPrev;
+            while (pindex->pprev && (pindex->nBits == nProofOfWorkLimit || CBlockHeader::GetAlgo(pindex->nVersion) != algo))
                 pindex = pindex->pprev;
-            if (pindex->pprev)
-                pindex = pindex->pprev;
-            return pindex->nBits;
-        }*/
-        return SimpleMovingAverageTarget(pindexLast, pblock, params);
-    } else {
-        if (pblock->IsProofOfStake() && (unsigned)(pindexLast->nHeight+1) >= (params.nMandatoryUpgradeBlock[1]+params.nMinerConfirmationWindow))
-            return SimpleMovingAverageTarget(pindexLast, pblock, params);
-        else
-            return CalculateNextTargetRequired(pindexLast, pblock, params);
+            const CBlockIndex* pprev = GetLastBlockIndexForAlgo(pindex->pprev, algo);
+            if (pprev && pprev->nHeight > 10) {
+                // Don't return pprev->nBits if it is another min-difficulty block; instead return pindex->nBits
+                if (pprev->nBits != nProofOfWorkLimit)
+                    return pprev->nBits;
+                else
+                    return pindex->nBits;
+            }
+        }
     }
+
+    if (pblock->IsProofOfStake() && (unsigned)(pindexLast->nHeight+1) >= (params.nMandatoryUpgradeBlock[1]+params.nMinerConfirmationWindow))
+        return SimpleMovingAverageTarget(pindexLast, pblock, params);
+    else
+        return CalculateNextTargetRequired(pindexLast, pblock, params);
 }
 
 unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)

@@ -29,12 +29,12 @@ uint64_t ComputeStakeModifierV2(const CBlockIndex* pindexPrev, const uint256& ke
 // Sets hashProofOfStake on success return
 uint256 stakeHash(unsigned int nTimeTx, CDataStream ss, unsigned int prevoutIndex, uint256 prevoutHash, unsigned int nTimeBlockFrom);
 bool stakeTargetHit(const uint256& hashProofOfStake, int64_t nValueIn, const arith_uint256& bnTargetPerCoinDay, bool fNewWeight);
-bool GetKernelStakeModifier(CBlockIndex* pindexPrev, uint256 hashBlockFrom, unsigned int nTimeTx, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake);
-bool CheckStakeKernelHash(const unsigned int& nBits, CBlockIndex* pindexPrev, const CBlockIndex* pindexFrom, const CTxOut& prevTxOut, const COutPoint& prevout, unsigned int& nTimeTx, unsigned int nHashDrift, bool fCheck, uint256& hashProofOfStake, bool fPrintProofOfStake = false);
+bool GetKernelStakeModifier(const CBlockIndex* pindexPrev, uint256 hashBlockFrom, unsigned int nTimeTx, const Consensus::Params& params, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake);
+bool CheckStakeKernelHash(const unsigned int& nBits, const CBlockIndex* pindexPrev, const CBlockIndex* pindexFrom, const CTxOut& prevTxOut, const COutPoint& prevout, unsigned int& nTimeTx, unsigned int nHashDrift, bool fCheck, uint256& hashProofOfStake, bool fPrintProofOfStake = false);
 
 // Check kernel hash target and coinstake signature
 // Sets hashProofOfStake on success return
-bool CheckProofOfStake(CValidationState& state, const CCoinsViewCache& view, CBlockIndex* pindexPrev, const CTransactionRef& tx, const unsigned int& nBits, unsigned int nTimeTx, uint256& hashProofOfStake);
+bool CheckProofOfStake(CValidationState& state, const CCoinsViewCache& view, const CBlockIndex* pindexPrev, const CTransactionRef& tx, const unsigned int& nBits, unsigned int nTimeTx, uint256& hashProofOfStake);
 
 // Check whether the coinstake timestamp meets protocol
 bool CheckCoinStakeTimestamp(int64_t nTimeBlock, int64_t nTimeTx);

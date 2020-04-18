@@ -1138,10 +1138,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
  * Return transaction in txOut, and if it was found inside a block, its hash is placed in hashBlock.
  * If blockIndex is provided, the transaction is fetched from the corresponding block.
  */
-bool GetTransaction(const uint256& hash, CTransactionRef& txOut, const Consensus::Params& consensusParams, uint256& hashBlock, bool fAllowSlow, const CBlockIndex* const block_index)
+bool GetTransaction(const uint256& hash, CTransactionRef& txOut, const Consensus::Params& consensusParams, uint256& hashBlock, const CBlockIndex* const block_index)
 {
-    const CBlockIndex* pindexSlow = block_index;
-
     LOCK(cs_main);
 
     if (!block_index) {
@@ -1154,20 +1152,13 @@ bool GetTransaction(const uint256& hash, CTransactionRef& txOut, const Consensus
         if (g_txindex) {
             return g_txindex->FindTx(hash, hashBlock, txOut);
         }
-
-        if (fAllowSlow) { // use coin database to locate block that contains transaction, and scan it
-            const Coin& coin = AccessByTxid(::ChainstateActive().CoinsTip(), hash);
-            if (!coin.IsSpent()) pindexSlow = ::ChainActive()[coin.nHeight];
-        }
-    }
-
-    if (pindexSlow) {
+    } else {
         CBlock block;
-        if (ReadBlockFromDisk(block, pindexSlow, consensusParams)) {
+        if (ReadBlockFromDisk(block, block_index, consensusParams)) {
             for (const auto& tx : block.vtx) {
                 if (tx->GetHash() == hash) {
                     txOut = tx;
-                    hashBlock = pindexSlow->GetBlockHash();
+                    hashBlock = block_index->GetBlockHash();
                     return true;
                 }
             }
@@ -1225,6 +1216,7 @@ bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, const Consensus::P
         return error("%s: Deserialize or I/O error - %s at %s", __func__, e.what(), pos.ToString());
     }
 
+    // Treat PoW and PoS blocks the same - don't waste time on redundant PoW checks that won't catch invalid PoS blocks anyway
     if (block.IsProofOfWork() && CBlockHeader::GetAlgo(block.nVersion) != CBlockHeader::ALGO_POW_SCRYPT_SQUARED) {
         // Check the header
         uint256 hash = block.GetPoWHash();
@@ -2443,9 +2435,11 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     // the peer who sent us this block is missing some data and wasn't able
     // to recognize that block is actually invalid.
     // TODO: resync data (both ways?) and try to reprocess this block later.
-    CAmount nExpectedBlockReward = GetBlockSubsidy(pindex->nHeight, fProofOfStake, nCoinAge, chainparams.GetConsensus());
-    if (pindex->nHeight < chainparams.GetConsensus().nMandatoryUpgradeBlock[0]) // Fees are burned on and after the mandatory upgrade block
-        nExpectedBlockReward += nFees;
+    CAmount nExpectedBlockReward = nFees + GetBlockSubsidy(pindex->nHeight, fProofOfStake, nCoinAge, chainparams.GetConsensus());
+    if (pindex->nHeight >= chainparams.GetConsensus().nMandatoryUpgradeBlock[0]) { // Fees are burned on and after the mandatory upgrade block
+        nExpectedBlockReward -= nFees;
+        nAmountBurned += nFees;
+    }
     CAmount nActualBlockReward = nFees + nValueOut - nValueIn;
     if (nExpectedBlockReward != nActualBlockReward) // For testing purposes only
         return state.Invalid(ValidationInvalidReason::CONSENSUS, error("%s: incorrect reward (actual=%li vs expected=%li)", __func__, nActualBlockReward, nExpectedBlockReward), REJECT_INVALID, "bad-cb-amount");
@@ -2474,8 +2468,6 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
 
     // peercoin: track money supply and mint amount info
     pindex->nMint = nActualBlockReward;
-    if (pindex->nHeight >= chainparams.GetConsensus().nMandatoryUpgradeBlock[0])
-        nAmountBurned += nFees;
     pindex->nMoneySupply = (pindex->pprev ? pindex->pprev->nMoneySupply : 0) + pindex->nMint - nAmountBurned;
 
     // peercoin: fees are not collected by miners as in bitcoin
@@ -5536,7 +5528,7 @@ static CMainCleanup instance_of_cmaincleanup;
 // guaranteed to be in main chain by sync-checkpoint. This rule is
 // introduced to help nodes establish a consistent view of the coin
 // age (trust score) of competing branches.
-bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache& view, unsigned int nTimeTx, int nHeightCurrent, uint64_t& nCoinAge)
+bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache& view, unsigned int nTimeTx, int nHeightCurrent, uint64_t& nCoinAge, const CBlockIndex* pindexFrom)
 {
     arith_uint256 bnSatoshiSecond = 0;  // coin age in the unit of satoshi-seconds
     nCoinAge = 0;
@@ -5551,49 +5543,50 @@ bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache& view, unsigned in
         const COutPoint& prevout = txin.prevout;
         Coin coin;
 
-        if (!view.GetCoin(prevout, coin))
-            return error("%s : previous transaction not in main chain", __func__); // Should revert to GetTransaction
+        int64_t nValueIn;
+        uint32_t nTimeTxPrev;
+        if (view.GetCoin(prevout, coin)) {
+            pindexFrom = ::ChainActive()[coin.nHeight];
+            nValueIn = coin.out.nValue;
+            nTimeTxPrev = coin.nTime;
+        } else {
+            //return error("%s : previous transaction not in main chain", __func__);
+            uint256 hashBlock;
+            CTransactionRef txPrev;
+            if (!GetTransaction(prevout.hash, txPrev, params, hashBlock, pindexFrom))
+                return error("%s : tx index not found", __func__);
 
-        // Transaction index is required to get to block header
-        //if (!fTxIndex)
-            //return false;  // Transaction index not available
-
-        /*uint256 hashBlock;
-        CTransactionRef txPrev;
-        if (GetTransaction(prevout.hash, txPrev, params, hashBlock, true, nullptr))
-        {*/
-            const CBlockIndex* pindexFrom = ::ChainActive()[coin.nHeight];
-            /*{
+            if (!pindexFrom) {
                 LOCK(cs_main);
                 pindexFrom = LookupBlockIndex(hashBlock);
-            }*/
-            if (!pindexFrom)
-                return error("%s : block index not found", __func__);
+            }
+            nValueIn = txPrev->vout[prevout.n].nValue;
+            nTimeTxPrev = txPrev->nTime;
+        }
 
-            unsigned int nTimeBlockFrom = pindexFrom->GetBlockTime();
-            int nHeightBlockFrom = pindexFrom->nHeight;
-            int64_t nStakeMinAge = nHeightCurrent >= params.nMandatoryUpgradeBlock[1] ? params.nStakeMinAge[1] : params.nStakeMinAge[0];
-            int nStakeMinDepth = nHeightCurrent >= params.nMandatoryUpgradeBlock[0] ? params.nStakeMinDepth[1] : params.nStakeMinDepth[0];
-            //LogPrintf("nTimeTx=%u, nTimeBlockFrom=%u, coin.nTime=%u, nHeightBlockFrom=%i, nStakeMinAge=%li, nStakeMinDepth=%i\n", nTimeTx, nTimeBlockFrom, coin.nTime, nHeightBlockFrom, nStakeMinAge, nStakeMinDepth);
+        if (!pindexFrom)
+            return error("%s : block index not found", __func__);
 
-            if (nTimeTx < nTimeBlockFrom)
-                return false;  // Transaction timestamp violation
+        unsigned int nTimeBlockFrom = pindexFrom->GetBlockTime();
+        int nHeightBlockFrom = pindexFrom->nHeight;
+        int64_t nStakeMinAge = nHeightCurrent >= params.nMandatoryUpgradeBlock[1] ? params.nStakeMinAge[1] : params.nStakeMinAge[0];
+        int nStakeMinDepth = nHeightCurrent >= params.nMandatoryUpgradeBlock[0] ? params.nStakeMinDepth[1] : params.nStakeMinDepth[0];
+        //LogPrintf("nTimeTx=%u, nTimeBlockFrom=%u, nTimeTxPrev=%u, nHeightBlockFrom=%i, nStakeMinAge=%li, nStakeMinDepth=%i\n", nTimeTx, nTimeBlockFrom, nTimeTxPrev, nHeightBlockFrom, nStakeMinAge, nStakeMinDepth);
 
-            if (nTimeBlockFrom + nStakeMinAge > nTimeTx || nHeightCurrent - nHeightBlockFrom < nStakeMinDepth)
-                continue; // only count coins meeting min age requirement
+        if (nTimeTx < nTimeBlockFrom)
+            return false; // Transaction timestamp violation
 
-            unsigned int nTimeDiff = nTimeTx - (nHeightCurrent >= params.nMandatoryUpgradeBlock[0] ? nTimeBlockFrom : coin.nTime);
-            if (nTimeDiff > params.nStakeMaxAge && nHeightCurrent >= params.nMandatoryUpgradeBlock[0])
-                nTimeDiff = params.nStakeMaxAge;
+        if (nTimeBlockFrom + nStakeMinAge > nTimeTx || nHeightCurrent - nHeightBlockFrom < nStakeMinDepth)
+            continue; // only count coins meeting min age requirement
 
-            int64_t nValueIn = coin.out.nValue;
-            bnSatoshiSecond += arith_uint256(nValueIn) * nTimeDiff;
+        unsigned int nTimeDiff = nTimeTx - (nHeightCurrent >= params.nMandatoryUpgradeBlock[0] ? nTimeBlockFrom : nTimeTxPrev);
+        if (nTimeDiff > params.nStakeMaxAge && nHeightCurrent >= params.nMandatoryUpgradeBlock[0])
+            nTimeDiff = params.nStakeMaxAge;
 
-            if (gArgs.GetBoolArg("-printcoinage", false))
-                LogPrintf("coin age nValueIn=%-12lld nTimeDiff=%d bnCentSecond=%s\n", nValueIn, nTimeDiff, (bnSatoshiSecond*100/COIN).ToString());
-        /*}
-        else
-            return error("%s : tx index not found", __func__);*/
+        bnSatoshiSecond += arith_uint256(nValueIn) * nTimeDiff;
+
+        if (gArgs.GetBoolArg("-printcoinage", false))
+            LogPrintf("coin age nValueIn=%-12lld nTimeDiff=%d bnCentSecond=%s\n", nValueIn, nTimeDiff, (bnSatoshiSecond*100/COIN).ToString());
     }
 
     arith_uint256 bnCoinDay = bnSatoshiSecond / COIN / (24 * 60 * 60);

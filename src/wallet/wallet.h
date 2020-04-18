@@ -69,7 +69,7 @@ static const unsigned int DEFAULT_KEYPOOL_SIZE = 1000;
 //! -paytxfee default
 constexpr CAmount DEFAULT_PAY_TX_FEE = 0;
 //! -fallbackfee default
-static const CAmount DEFAULT_FALLBACK_FEE = 20 * COIN; // 20 * DEFAULT_TRANSACTION_MINFEE
+static const CAmount DEFAULT_FALLBACK_FEE = 4 * COIN; // 20 * DEFAULT_TRANSACTION_MINFEE
 //! -discardfee default
 static const CAmount DEFAULT_DISCARD_FEE = 10 * COIN; // 10 * DEFAULT_TRANSACTION_MINFEE
 //! -mintxfee default
@@ -1433,7 +1433,7 @@ public:
     void postInitProcess();
 
     /* Initialize AutoBackup functionality */
-    static bool InitAutoBackup();
+    static bool InitAutoBackup(interfaces::Chain& chain);
 
     bool BackupWallet(const std::string& strDest);
 

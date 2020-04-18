@@ -126,6 +126,9 @@ static UniValue generateBlocks(const CScript& coinbase_script, int nGenerate, ui
         while (nMaxTries > 0 && pblock->nNonce < std::numeric_limits<uint32_t>::max() && !CheckProofOfWork(pblock->GetPoWHash(), pblock->nBits, algo, consensusParams) && !ShutdownRequested()) {
             ++pblock->nNonce;
             --nMaxTries;
+            if ((pblock->nNonce & 0x1ffff) == 0)
+                pblock->nTime = std::max((int64_t)pblock->nTime, GetAdjustedTime());
+                //UpdateTime(pblock, consensusParams, ::ChainActive().Tip());
         }
         if (nMaxTries == 0 || ShutdownRequested()) {
             break;

@@ -5659,7 +5659,7 @@ void CWallet::postInitProcess()
     chain().requestMempoolTransactions(*this);
 }
 
-bool CWallet::InitAutoBackup()
+bool CWallet::InitAutoBackup(interfaces::Chain& chain)
 {
     if (gArgs.GetBoolArg("-disablewallet", DEFAULT_DISABLE_WALLET))
         return true;
@@ -5674,9 +5674,11 @@ bool CWallet::InitAutoBackup()
 
     if (!AutoBackupWallet(NULL, strWalletFile, strWarning, strError)) {
         if (!strWarning.empty())
-            InitWarning(strWarning);
-        if (!strError.empty())
-            return InitError(strError);
+            chain.initWarning(strWarning);
+        if (!strError.empty()) {
+            chain.initError(strError);
+            return false;
+        }
     }
 
     return true;
@@ -5721,13 +5723,13 @@ bool AutoBackupWallet(const std::shared_ptr<CWallet>& wallet, const std::string&
     }
 
     // Create backup of the ...
-    std::string dateTimeStr = FormatISO8601DateTime(GetTime());
+    std::string dateTimeStr = "." + FormatISO8601DateTime(GetTime());
     if (wallet)
     {
         // ... opened wallet
         LOCK2(cs_main, wallet->cs_wallet);
         //strWalletFile = wallet->strWalletFile;
-        strWalletFile = gArgs.GetArg("-wallet", "wallet.dat"); // TODO CHECK IF THIS IS OKAY
+        strWalletFile = "wallet.dat"; //gArgs.GetArg("-wallet", "wallet.dat"); // TODO CHECK IF THIS IS OKAY
         fs::path backupFile = backupsDir / (strWalletFile + dateTimeStr);
         if (!wallet->BackupWallet(backupFile.string())) {
             strBackupWarningRet = strprintf(_("Failed to create backup %s!").translated, backupFile.string());

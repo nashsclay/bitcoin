@@ -8,6 +8,7 @@
 #include <primitives/transaction.h>
 #include <script/interpreter.h>
 #include <consensus/validation.h>
+#include <policy/policy.h>
 
 // TODO remove the following dependencies
 #include <chain.h>
@@ -158,8 +159,9 @@ int64_t GetTransactionSigOpCost(const CTransaction& tx, const CCoinsViewCache& i
 
 CAmount GetMinFee(const CTransaction& tx)
 {
-    int64_t nBytes = ::GetSerializeSize(tx, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS);
-    CAmount nMinFee = tx.nVersion < CTransaction::CURRENT_VERSION ? nBytes : nBytes * COIN / 1000; // DEFAULT_TRANSACTION_MINFEE / 1000;
+    //int64_t nBytes = ::GetSerializeSize(tx, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS);
+    int64_t vBytes = GetVirtualTransactionSize(tx); // Remember, fees are normally calculated in sats/KB
+    CAmount nMinFee = tx.nVersion < CTransaction::CURRENT_VERSION ? (vBytes * 10000 / 1000) : (vBytes * COIN / 1000); // DEFAULT_TRANSACTION_MINFEE / 1000;
 
     if (!MoneyRange(nMinFee))
         nMinFee = MAX_MONEY;
@@ -207,8 +209,10 @@ bool Consensus::CheckTxInputs(const CTransaction& tx, CValidationState& state, c
         }
 
         // peercoin: enforce transaction fees for every block
-        if (txfee_aux < GetMinFee(tx))
-            return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-txns-fee-not-enough");
+        const CAmount minfee = GetMinFee(tx);
+        if (txfee_aux < minfee)
+            return state.Invalid(ValidationInvalidReason::CONSENSUS, false, REJECT_INVALID, "bad-txns-fee-not-enough",
+                strprintf("txfee (%s) < minfee (%s)", FormatMoney(txfee_aux), FormatMoney(minfee)));
         txfee = txfee_aux;
     } else
         txfee = 0;

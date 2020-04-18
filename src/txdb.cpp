@@ -283,7 +283,7 @@ bool CBlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, 
                 //pindexNew->nStakeTime     = diskindex.nStakeTime;
                 //pindexNew->hashProofOfStake = diskindex.hashProofOfStake;
 
-                // Treat PoW and PoS blocks the same - don't waste time on redundant PoW checks that won't catch invalid PoS blocks anyway - nNonce == 0 for PoS blocks
+                // Treat PoW and PoS blocks the same - don't waste time on redundant PoW checks that won't catch invalid PoS blocks anyway
                 const int algo = CBlockHeader::GetAlgo(pindexNew->nVersion);
                 if (pindexNew->IsProofOfWork() && algo != CBlockHeader::ALGO_POW_SCRYPT_SQUARED) {
                     uint256 hash = pindexNew->GetBlockHeader().GetPoWHash();
