@@ -36,10 +36,10 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
 
     if (pindexLast->nHeight+1 >= params.nMandatoryUpgradeBlock[1] && params.fPowAllowMinDifficultyBlocks && algo != -1) {
         // Special difficulty rule:
-        // If the new block's timestamp is more than 4 hours
+        // If the new block's timestamp is more than 2* 10 minutes
         // then allow mining of a min-difficulty block.
         const CBlockIndex* pindexPrev = GetLastBlockIndexForAlgo(pindexLast, algo);
-        if (pindexPrev->nHeight > 10 && pblock->GetBlockTime() > pindexPrev->GetBlockTime() + (4*60*60))
+        if (pindexPrev->nHeight > 100 && pblock->GetBlockTime() > pindexPrev->GetBlockTime() + (20*60))
             return nProofOfWorkLimit;
         if (pindexPrev->pprev && pindexPrev->nBits == nProofOfWorkLimit) {
             // Return the block before the last non-special-min-difficulty-rules-block
@@ -47,7 +47,7 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
             while (pindex->pprev && (pindex->nBits == nProofOfWorkLimit || CBlockHeader::GetAlgo(pindex->nVersion) != algo))
                 pindex = pindex->pprev;
             const CBlockIndex* pprev = GetLastBlockIndexForAlgo(pindex->pprev, algo);
-            if (pprev && pprev->nHeight > 10) {
+            if (pprev && pprev->nHeight > 100) {
                 // Don't return pprev->nBits if it is another min-difficulty block; instead return pindex->nBits
                 if (pprev->nBits != nProofOfWorkLimit)
                     return pprev->nBits;
@@ -68,25 +68,26 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CB
     const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
     const bool fProofOfStake = pblock->IsProofOfStake();
     const arith_uint256 bnPowLimit = algo == -1 ? UintToArith256(params.powLimit[fProofOfStake ? CBlockHeader::ALGO_POS : CBlockHeader::ALGO_POW_QUARK]) : UintToArith256(params.powLimit[algo]);
+    const unsigned int nProofOfWorkLimit = bnPowLimit.GetCompact();
     if (pindexLast == nullptr)
-        return bnPowLimit.GetCompact(); // genesis block
+        return nProofOfWorkLimit; // genesis block
 
     const CBlockIndex* pindexPrev = algo == -1 ? GetLastBlockIndex(pindexLast, fProofOfStake) : GetLastBlockIndexForAlgo(pindexLast, algo);
     if (pindexPrev->pprev == nullptr)
-        return bnPowLimit.GetCompact(); // first block
+        return nProofOfWorkLimit; // first block
     const CBlockIndex* pindexPrevPrev = algo == -1 ? GetLastBlockIndex(pindexPrev->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindexPrev->pprev, algo);
     if (pindexPrevPrev->pprev == nullptr)
-        return bnPowLimit.GetCompact(); // second block
+        return nProofOfWorkLimit; // second block
 
-    int64_t nActualSpacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime(); // Difficulty for PoW and PoS are calculated separately
+    int nActualSpacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime(); // Difficulty for PoW and PoS are calculated separately
 
     // peercoin: target change every block
     // peercoin: retarget with exponential moving toward target spacing
     arith_uint256 bnNew;
     bnNew.SetCompact(pindexPrev->nBits);
-    int64_t nTargetSpacing = params.nPowTargetSpacing;
-    uint64_t nTargetTimespan = params.nPowTargetTimespan;
-    int64_t nInterval = params.DifficultyAdjustmentInterval();
+    int nTargetSpacing = params.nPowTargetSpacing;
+    uint32_t nTargetTimespan = params.nPowTargetTimespan;
+    int nInterval = params.DifficultyAdjustmentInterval();
 
     // Previous blunders with difficulty calculations follow...
     int nHeight = pindexLast->nHeight + 1;
@@ -116,7 +117,7 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CB
         if (nActualSpacing < 1)
             nActualSpacing = 1;
 
-        // Should have just returned bnPowLimit for one block instead of this nonsense
+        // Should have just returned nProofOfWorkLimit for one block instead of this nonsense
         //if (nHeight < (params.nMandatoryUpgradeBlock[0]+10) && nHeight >= params.nMandatoryUpgradeBlock[0])
             //bnNew *= (int)pow(4.0, 10.0+params.nMandatoryUpgradeBlock[0]-nHeight);
     } else { // Now that we got that over with, we can do it the right way here
@@ -151,11 +152,17 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CB
     // of f(x) (or simply the slope of this linear equation) is what determines how quickly the difficulty adjustment responds to changes in solvetimes,
     // with smaller derivatives corresponding to slower responding difficulty calculations. The derivative of our current equation is 1 / 3640 while
     // the previous equation with the 20 minute nTargetTimespan had a derivative of 1 / 640.
-    uint64_t numerator = (nInterval - 1) * nTargetSpacing + 2 * nActualSpacing;
-    uint64_t denominator = (nInterval + 1) * nTargetSpacing;
+    uint32_t numerator = (nInterval - 1) * nTargetSpacing + 2 * nActualSpacing;
+    uint32_t denominator = (nInterval + 1) * nTargetSpacing;
 
-    // Keep in mind the integer division here - this is why the *= operator cannot be used, as it would change the order of operations so that the division occurred first
-    bnNew = (bnNew * numerator) / denominator;
+    // Keep in mind the order of operations and integer division here - this is why the *= operator cannot be used, as it could cause overflow or integer division to occur
+    arith_uint512 bnNew512 = arith_uint512(bnNew) * numerator / denominator;
+
+    // The scrypt algorithm was affected by the arith_uint256 overflow bug while calculating difficulty, so we need to use the old formula here
+    if (nHeight < params.nMandatoryUpgradeBlock[1] && algo == CBlockHeader::ALGO_POW_SCRYPT_SQUARED)
+        bnNew = bnNew * numerator / denominator;
+    else
+        bnNew = bnNew512.trim256();
 
     if (bnNew > bnPowLimit)
         bnNew = bnPowLimit;
@@ -168,24 +175,25 @@ unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlo
     const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
     const bool fProofOfStake = pblock->IsProofOfStake();
     const arith_uint256 bnPowLimit = algo == -1 ? UintToArith256(params.powLimit[fProofOfStake ? CBlockHeader::ALGO_POS : CBlockHeader::ALGO_POW_QUARK]) : UintToArith256(params.powLimit[algo]);
-    uint64_t nTargetSpacing = params.nPowTargetSpacing;
+    const unsigned int nProofOfWorkLimit = bnPowLimit.GetCompact();
+    uint32_t nTargetSpacing = params.nPowTargetSpacing;
     nTargetSpacing *= 2; // 160 second block time for PoW + 160 second block time for PoS = 80 second effective block time
     if (!fProofOfStake)
         nTargetSpacing *= (CBlockHeader::ALGO_COUNT - 1); // Multiply by the number of PoW algos
 
     bool fUseTempering = true; // true = DigiShield, false = Dark Gravity Wave
-    int nPastBlocks = params.nPowTargetTimespan / nTargetSpacing; // DGW default of 24 - needs to be more than 6 for MTP=11 enforcement to ensure that nActualTimespan will always be positive (not a problem with sequential timestamps)
+    int nPastBlocks = params.nPowTargetTimespan / nTargetSpacing; // DGW default of 24 - needs to be more than 6 for MTP=11 enforcement to ensure that nActualTimespan will always be positive (or require sequential timestamps)
     // nFirstWeightMultiplier can be calculated using the formula (nPastBlocks * x) / (1 - x) + 1 where x = 1/3 (configurable) in order to give 33.3% of the overall weight to the most recent target
     const uint32_t nFirstWeightMultiplier = 1; // DGW default of 2 to put double weight on the most recent element in the average - set equal to 1 for normal SMA behavior
     if (pindexLast == nullptr)
-        return bnPowLimit.GetCompact(); // genesis block
+        return nProofOfWorkLimit; // genesis block
 
     const CBlockIndex *pindexPrev = algo == -1 ? GetLastBlockIndex(pindexLast, fProofOfStake) : GetLastBlockIndexForAlgo(pindexLast, algo);
     if (pindexPrev->pprev == nullptr)
-        return bnPowLimit.GetCompact(); // first block
+        return nProofOfWorkLimit; // first block
 
     //nPastBlocks = std::min(nPastBlocks, pindexLast->nHeight);
-    if (pindexLast->nHeight < nPastBlocks + 2) // We are adding 2 here to skip the first two blocks at bnPowLimit, but it isn't necessary to do this for the average to work
+    if (pindexLast->nHeight < nPastBlocks + 2) // We are adding 2 here to skip the first two blocks at nProofOfWorkLimit, but it isn't necessary to do this for the average to work
         return CalculateNextTargetRequired(pindexLast, pblock, params);
 
     const CBlockIndex *pindex = pindexPrev;
@@ -193,25 +201,30 @@ unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlo
 
     // This is a simple moving average of difficulty targets with double weight for the most recent target by default (same as a harmonic SMA of difficulties)
     // (2 * T1 + T2 + T3 + T4 + ...) / (24 + 1)
-    for (int i = 1; i <= nPastBlocks; i++) {
-        arith_uint256 bnTarget = arith_uint256().SetCompact(pindex->nBits);
-        if (i == 1)
-            bnTarget *= nFirstWeightMultiplier;
-        bnPastTargetAvg += bnTarget / (nPastBlocks + nFirstWeightMultiplier - 1); // Number of elements added to average is nFirstWeightMultiplier - 1
+    for (int nCountBlocks = 1; nCountBlocks <= nPastBlocks; nCountBlocks++) {
+        if (pindex->nBits != nProofOfWorkLimit) { // Don't add min difficulty targets to the average
+            arith_uint256 bnTarget = arith_uint256().SetCompact(pindex->nBits);
+            if (nCountBlocks == 1)
+                bnTarget *= nFirstWeightMultiplier;
+            bnPastTargetAvg += bnTarget / (nPastBlocks + nFirstWeightMultiplier - 1); // Number of elements added to average is nFirstWeightMultiplier - 1
+        } else
+            nCountBlocks--; // Average one more block to make up for the one we skipped
 
         const CBlockIndex* pprev = algo == -1 ? GetLastBlockIndex(pindex->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindex->pprev, algo);
         // If we skip the last index here, it causes nActualTimespan to be calculated with one less timestamp than it is supposed to use
-        if (pprev && pprev->nHeight != 0) //&& i != nPastBlocks
+        if (pprev && pprev->nHeight != 0) //&& nCountBlocks != nPastBlocks
             pindex = pprev;
         else
             break;
     }
 
+    if (bnPastTargetAvg == arith_uint256())
+        bnPastTargetAvg = bnPowLimit;
     arith_uint256 bnNew(bnPastTargetAvg);
 
     // If pprev was nullptr, nActualTimespan will use one less than nPastBlocks timestamps, which causes difficulty to be slightly higher than expected
-    int64_t nActualTimespan = pindexPrev->GetBlockTime() - pindex->GetBlockTime();
-    int64_t nTargetTimespan = nPastBlocks * nTargetSpacing;
+    int nActualTimespan = pindexPrev->GetBlockTime() - pindex->GetBlockTime();
+    int nTargetTimespan = nPastBlocks * nTargetSpacing;
     // Respond faster by avoiding tempering when nActualTimespan is very small
     if (nActualTimespan <= nTargetTimespan / 3)
         fUseTempering = false;
@@ -228,8 +241,9 @@ unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlo
     if (nActualTimespan < 1)
         nActualTimespan = 1;
 
-    // Keep in mind the integer division here - this is why the *= operator cannot be used, as it would change the order of operations so that the division occurred first
-    bnNew = (bnNew * nActualTimespan) / nTargetTimespan;
+    // Keep in mind the order of operations and integer division here - this is why the *= operator cannot be used, as it could cause overflow or integer division to occur
+    arith_uint512 bnNew512 = arith_uint512(bnNew) * nActualTimespan / nTargetTimespan;
+    bnNew = bnNew512.trim256();
 
     if (bnNew > bnPowLimit)
         bnNew = bnPowLimit;

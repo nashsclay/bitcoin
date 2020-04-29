@@ -16,7 +16,7 @@ class CMasternodePayments;
 class CMasternodePaymentVote;
 class CMasternodeBlockPayees;
 
-static const int MNPAYMENTS_SIGNATURES_REQUIRED         = 6; // TODO MAYBE INCREASE (7-10?)
+static const int MNPAYMENTS_SIGNATURES_REQUIRED         = 9; // 8-9 is reasonable to require here as all blocks should receive 8-10 signatures unless the network is failing to reach consensus
 static const int MNPAYMENTS_SIGNATURES_TOTAL            = 10;
 
 //! minimum peer version that can receive and send masternode payment messages,
@@ -34,7 +34,7 @@ extern CMasternodePayments mnpayments;
 
 /// TODO: all 4 functions do not belong here really, they should be refactored/moved somewhere (main.cpp ?)
 bool IsBlockValueValid(const CBlock& block, int nBlockHeight, CAmount nExpectedBlockReward, CAmount nActualBlockReward, std::string& strErrorRet);
-bool IsBlockPayeeValid(const CTransaction& txNew, int nBlockHeight, CAmount blockReward);
+bool IsBlockPayeeValid(const CTransaction& txNew, int nBlockHeight, CAmount nExpectedBlockReward, CAmount nActualBlockReward);
 void FillBlockPayments(CMutableTransaction& txNew, int nBlockHeight, CAmount blockReward, CTxOut& txoutMasternodeRet, std::vector<CTxOut>& voutSuperblockRet);
 std::string GetRequiredPaymentsString(int nBlockHeight);
 
@@ -100,7 +100,7 @@ public:
     bool GetBestPayee(CScript& payeeRet) const;
     bool HasPayeeWithVotes(const CScript& payeeIn, int nVotesReq) const;
 
-    bool IsTransactionValid(const CTransaction& txNew) const;
+    bool IsTransactionValid(const CTransaction& txNew, CAmount nExpectedBlockReward, CAmount nActualBlockReward) const;
 
     std::string GetRequiredPaymentsString() const;
 };
@@ -214,7 +214,7 @@ public:
     void CheckAndRemove();
 
     bool GetBlockPayee(int nBlockHeight, CScript& payeeRet) const;
-    bool IsTransactionValid(const CTransaction& txNew, int nBlockHeight) const;
+    bool IsTransactionValid(const CTransaction& txNew, int nBlockHeight, CAmount nExpectedBlockReward, CAmount nActualBlockReward) const;
     bool IsScheduled(const masternode_info_t& mnInfo, int nNotBlockHeight) const;
 
     bool UpdateLastVote(const CMasternodePaymentVote& vote);

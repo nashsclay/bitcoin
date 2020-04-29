@@ -80,17 +80,20 @@ class CTxDSIn : public CTxIn
 {
 public:
     // memory only
+    CAmount nValue;
     CScript prevPubKey;
     bool fHasSig; // flag to indicate if signed
 
-    CTxDSIn(const CTxIn& txin, const CScript& script) :
+    CTxDSIn(const CTxIn& txin, const CAmount& amount, const CScript& script) :
         CTxIn(txin),
+        nValue(amount),
         prevPubKey(script),
         fHasSig(false)
         {}
 
     CTxDSIn() :
         CTxIn(),
+        nValue(0),
         prevPubKey(),
         fHasSig(false)
         {}

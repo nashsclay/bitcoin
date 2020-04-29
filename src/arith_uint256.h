@@ -49,6 +49,19 @@ public:
             pn[i] = b.pn[i];
     }
 
+    template<unsigned int B>
+    base_uint(const base_uint<B>& b)
+    {
+        static_assert(BITS/32 > 0 && BITS%32 == 0, "Template parameter BITS must be a positive multiple of 32.");
+
+        for (int i = 0; i < WIDTH; i++) {
+            if (i < b.WIDTH)
+                pn[i] = b.pn[i];
+            else
+                pn[i] = 0;
+        }
+    }
+
     base_uint& operator=(const base_uint& b)
     {
         for (int i = 0; i < WIDTH; i++)

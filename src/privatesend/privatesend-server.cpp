@@ -326,8 +326,8 @@ void CPrivateSendServer::CreateFinalTransaction(CConnman& connman)
             txNew.vin.push_back(txdsin);
     }
 
-    //sort(txNew.vin.begin(), txNew.vin.end(), CompareInputBIP69()); TODO
-    //sort(txNew.vout.begin(), txNew.vout.end(), CompareOutputBIP69());
+    std::sort(txNew.vin.begin(), txNew.vin.end(), CompareInputBIP69());
+    std::sort(txNew.vout.begin(), txNew.vout.end(), CompareOutputBIP69());
 
     finalMutableTransaction = txNew;
     LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CreateFinalTransaction -- finalMutableTransaction=%s", txNew.ToString());
@@ -543,6 +543,7 @@ bool CPrivateSendServer::IsInputScriptSigValid(const CTxIn& txin)
     int i = 0;
     int nTxInIndex = -1;
     CScript sigPubKey = CScript();
+    CAmount nValue = 0;
 
     for (const auto& entry : vecEntries) {
 
@@ -555,6 +556,7 @@ bool CPrivateSendServer::IsInputScriptSigValid(const CTxIn& txin)
             if(txdsin.prevout == txin.prevout) {
                 nTxInIndex = i;
                 sigPubKey = txdsin.prevPubKey;
+                nValue = txdsin.nValue;
             }
             i++;
         }
@@ -563,7 +565,7 @@ bool CPrivateSendServer::IsInputScriptSigValid(const CTxIn& txin)
     if(nTxInIndex >= 0) { //might have to do this one input at a time?
         txNew.vin[nTxInIndex].scriptSig = txin.scriptSig;
         LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::IsInputScriptSigValid -- verifying scriptSig %s\n", ScriptToAsmStr(txin.scriptSig).substr(0,24));
-        if(!VerifyScript(txNew.vin[nTxInIndex].scriptSig, sigPubKey, nullptr, SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC, MutableTransactionSignatureChecker(&txNew, nTxInIndex, 0))) { // TODO
+        if(!VerifyScript(txNew.vin[nTxInIndex].scriptSig, sigPubKey, &(txNew.vin[nTxInIndex].scriptWitness), MANDATORY_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_STRICTENC, MutableTransactionSignatureChecker(&txNew, nTxInIndex, nValue))) {
             LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::IsInputScriptSigValid -- VerifyScript() failed on input %d\n", nTxInIndex);
             return false;
         }

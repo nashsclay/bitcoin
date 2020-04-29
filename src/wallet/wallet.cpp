@@ -3426,7 +3426,7 @@ bool CWallet::SelectCoinsByDenominations(int nDenom, CAmount nValueMin, CAmount 
             for (const auto& nBit : vecBits) {
                 if (out.tx->tx->vout[out.i].nValue == vecPrivateSendDenominations[nBit]) {
                     nValueRet += out.tx->tx->vout[out.i].nValue;
-                    vecTxDSInRet.push_back(CTxDSIn(txin, out.tx->tx->vout[out.i].scriptPubKey));
+                    vecTxDSInRet.push_back(CTxDSIn(txin, out.tx->tx->vout[out.i].nValue, out.tx->tx->vout[out.i].scriptPubKey));
                     vCoinsRet.push_back(out);
                     nDenomResult |= 1 << nBit;
                 }
@@ -3596,7 +3596,7 @@ bool CWallet::GetCollateralTxDSIn(CTxDSIn& txdsinRet, CAmount& nValueRet) const
     {
         if (CPrivateSend::IsCollateralAmount(out.tx->tx->vout[out.i].nValue))
         {
-            txdsinRet = CTxDSIn(CTxIn(out.tx->tx->GetHash(), out.i), out.tx->tx->vout[out.i].scriptPubKey);
+            txdsinRet = CTxDSIn(CTxIn(out.tx->tx->GetHash(), out.i), out.tx->tx->vout[out.i].nValue, out.tx->tx->vout[out.i].scriptPubKey);
             nValueRet = out.tx->tx->vout[out.i].nValue;
             return true;
         }
@@ -3913,6 +3913,7 @@ bool CWallet::CreateTransaction(interfaces::Chain::Lock& locked_chain, const std
     {
         std::set<CInputCoin> setCoins;
         auto locked_chain = chain().lock();
+        CTxOut newTxOut;
         LOCK(cs_wallet);
         {
             std::vector<COutput> vAvailableCoins;
@@ -4074,7 +4075,7 @@ bool CWallet::CreateTransaction(interfaces::Chain::Lock& locked_chain, const std
                         privateSendClient.ClearSkippedDenominations();
                     } else {
                         // Fill a vout to ourself
-                        CTxOut newTxOut(nChange, scriptChange);
+                        newTxOut = CTxOut(nChange, scriptChange);
 
                         // Never create dust outputs; if we would, just
                         // add the dust to the fee.
@@ -4207,6 +4208,19 @@ bool CWallet::CreateTransaction(interfaces::Chain::Lock& locked_chain, const std
         const uint32_t nSequence = coin_control.m_signal_bip125_rbf.get_value_or(m_signal_rbf) ? MAX_BIP125_RBF_SEQUENCE : (CTxIn::SEQUENCE_FINAL - 1);
         for (const auto& coin : selected_coins) {
             txNew.vin.push_back(CTxIn(coin.outpoint, CScript(), nSequence));
+        }
+
+        std::sort(txNew.vin.begin(), txNew.vin.end(), CompareInputBIP69());
+        std::sort(txNew.vout.begin(), txNew.vout.end(), CompareOutputBIP69());
+
+        // If there was change output added before, we must update its position now
+        if (nChangePosInOut != -1) {
+            for (unsigned int i = 0; i < txNew.vout.size(); i++) {
+                if (txNew.vout[i] == newTxOut) {
+                    nChangePosInOut = i;
+                    break;
+                }
+            }
         }
 
         if (sign)

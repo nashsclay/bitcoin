@@ -261,7 +261,7 @@ private:
     bool fAttacked = false;
 
 public:
-    static const int SIGNATURES_REQUIRED        = 6; // TODO MAYBE INCREASE (10-15?)
+    static const int SIGNATURES_REQUIRED        = 8; // 6-8 should be reasonable for good security and avoiding DoS vectors
     static const int SIGNATURES_TOTAL           = 10;
 
     COutPointLock(const COutPoint& outpointIn) :

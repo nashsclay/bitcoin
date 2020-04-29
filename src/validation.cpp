@@ -2449,7 +2449,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
         //return state.DoS(0, error("ConnectBlock(DASH): %s", strError), REJECT_INVALID, "bad-cb-amount");
     }
 
-    if (!IsBlockPayeeValid(fProofOfStake ? *block.vtx[1] : *block.vtx[0], pindex->nHeight, nExpectedBlockReward)) { //TODO
+    if (!IsBlockPayeeValid(fProofOfStake ? *block.vtx[1] : *block.vtx[0], pindex->nHeight, nExpectedBlockReward, nActualBlockReward)) {
         //mapRejectedBlocks.insert(std::make_pair(pindex->GetBlockHash(), GetTime()));
         return state.Invalid(ValidationInvalidReason::RECENT_CONSENSUS_CHANGE, error("ConnectBlock(DASH): couldn't find masternode or superblock payments"),
                                 REJECT_INVALID, "bad-cb-payee");
@@ -3784,9 +3784,9 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
 
     // Check proof of work
     const Consensus::Params& consensusParams = params.GetConsensus();
+    //LogPrintf("%s: block %i - bnTarget = %s, expected bnTarget = %s\n", __func__, nHeight, arith_uint256().SetCompact(block.nBits).ToString(), arith_uint256().SetCompact(GetNextWorkRequired(pindexPrev, &block, consensusParams)).ToString());
     if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
         return state.Invalid(ValidationInvalidReason::BLOCK_INVALID_HEADER, false, REJECT_INVALID, "bad-diffbits", "incorrect difficulty target");
-    //LogPrintf("%s: block %i - bnTarget = %s, expected bnTarget = %s\n", __func__, nHeight, arith_uint256().SetCompact(block.nBits).ToString(), arith_uint256().SetCompact(GetNextWorkRequired(pindexPrev, &block, consensusParams)).ToString());
 
     // Reject new PoW algorithms until they have been activated
     if (nHeight < consensusParams.nMandatoryUpgradeBlock[1] && CBlockHeader::GetAlgo(block.nVersion) > CBlockHeader::ALGO_POW_SCRYPT_SQUARED)
