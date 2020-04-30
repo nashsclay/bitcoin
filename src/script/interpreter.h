@@ -100,7 +100,7 @@ enum
     //
     SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM = (1U << 12),
 
-    // Segwit script only: Require the argument of OP_IF/NOTIF to be exactly 0x01 or empty vector
+    // Segwit script only: Require the argument of OP_IF/NOTIF to be exactly 0x01 or empty vector (now applies to all scripts)
     //
     SCRIPT_VERIFY_MINIMALIF = (1U << 13),
 

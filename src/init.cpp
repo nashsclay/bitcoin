@@ -77,6 +77,10 @@
 #include <zmq/zmqrpc.h>
 #endif
 
+#ifdef USE_SSE2
+#include <crypto/scrypt.h>
+#endif
+
 static bool fFeeEstimatesInitialized = false;
 static const bool DEFAULT_PROXYRANDOMIZE = true;
 static const bool DEFAULT_REST_ENABLE = false;
@@ -969,11 +973,14 @@ bool AppInitParameterInteraction()
 
     // if using block pruning, then disallow txindex
     if (gArgs.GetArg("-prune", 0)) {
-        if (gArgs.GetBoolArg("-txindex", DEFAULT_TXINDEX))
-            return InitError(_("Prune mode is incompatible with -txindex.").translated);
-        if (!g_enabled_filter_types.empty()) {
+        //if (gArgs.GetBoolArg("-txindex", DEFAULT_TXINDEX))
+            //return InitError(_("Prune mode is incompatible with -txindex.").translated);
+        if (!g_enabled_filter_types.empty())
             return InitError(_("Prune mode is incompatible with -blockfilterindex.").translated);
-        }
+        gArgs.ForceSetArg("-txindex", "0");
+        LogPrintf("%s: parameter interaction: -prune set -> setting -txindex=0\n", __func__);
+        gArgs.ForceSetArg("-litemode", "1");
+        LogPrintf("%s: parameter interaction: -prune set -> setting -litemode=1\n", __func__);
     }
 
     // -bind and -whitebind can't be set when not listening
@@ -1305,6 +1312,11 @@ bool AppInitMain(InitInterfaces& interfaces)
         if (!AppInitServers())
             return InitError(_("Unable to start HTTP server. See debug log for details.").translated);
     }
+
+#if defined(USE_SSE2)
+    std::string sse2detect = scrypt_detect_sse2();
+    LogPrintf("%s\n", sse2detect);
+#endif
 
     // ********************************************************* Step 5: verify wallet database integrity
     for (const auto& client : interfaces.chain_clients) {

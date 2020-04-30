@@ -80,6 +80,10 @@ private:
     const bool m_enable_bip61;
 };
 
+void EraseInv(const CInv& inv, const CNode* pnode) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+void AskForInv(const CInv& inv, const CNode* pnode) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool PotentialAskForOverflow(const size_t& elements, const CNode* pnode);
+
 struct CNodeStateStats {
     int nMisbehavior = 0;
     int nSyncHeight = -1;
@@ -92,5 +96,6 @@ bool GetNodeStateStats(NodeId nodeid, CNodeStateStats &stats);
 
 /** Relay transaction to every node */
 void RelayTransaction(const uint256&, const CConnman& connman);
+void RelayInv(const CInv& inv, const CConnman& connman, const int minProtoVersion = MIN_PEER_PROTO_VERSION);
 
 #endif // BITCOIN_NET_PROCESSING_H

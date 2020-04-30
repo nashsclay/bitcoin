@@ -124,6 +124,15 @@ bool WalletInit::ParameterInteraction() const
     if (gArgs.GetArg("-prune", 0) && gArgs.GetBoolArg("-rescan", false))
         return InitError(_("Rescans are not possible in pruned mode. You will need to use -reindex which will download the whole blockchain again.").translated);
 
+    if (gArgs.IsArgSet("-walletbackupsdir")) {
+        if (!boost::filesystem::is_directory(gArgs.GetArg("-walletbackupsdir", ""))) {
+            LogPrintf("%s: Warning: incorrect parameter -walletbackupsdir, path must exist! Using default path.\n", __func__);
+            InitWarning("Warning: incorrect parameter -walletbackupsdir, path must exist! Using default path.\n");
+
+            gArgs.ForceSetArg("-walletbackupsdir", "");
+        }
+    }
+
     return true;
 }
 

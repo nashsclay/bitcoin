@@ -23,7 +23,7 @@
 static const unsigned int MAX_SCRIPT_ELEMENT_SIZE = 520;
 
 // Maximum number of non-push operations per script
-static const int MAX_OPS_PER_SCRIPT = 201;
+static const int MAX_OPS_PER_SCRIPT = 500;
 
 // Maximum number of public keys per multisig
 static const int MAX_PUBKEYS_PER_MULTISIG = 20;
@@ -433,7 +433,7 @@ public:
         return ret;
     }
 
-    CScript(int64_t b)        { operator<<(b); }
+    explicit CScript(int64_t b) { operator<<(b); }
 
     explicit CScript(opcodetype b)     { operator<<(b); }
     explicit CScript(const CScriptNum& b) { operator<<(b); }

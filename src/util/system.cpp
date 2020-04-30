@@ -69,7 +69,19 @@
 // Application startup time (used for uptime calculation)
 const int64_t nStartupTime = GetTime();
 
+bool fMasternodeMode = false;
+bool fLiteMode = false;
+/**
+    nWalletBackups:
+        1..10   - number of automatic backups to keep
+        0       - disabled by command-line
+        -1      - disabled because of some error during run-time
+        -2      - disabled because wallet was locked and we were not able to replenish keypool
+*/
+int nWalletBackups = 10;
+
 const char * const BITCOIN_CONF_FILENAME = "bitcoin.conf";
+const char * const MASTERNODE_CONF_FILENAME = "masternode.conf";
 
 ArgsManager gArgs;
 
@@ -622,6 +634,9 @@ std::string ArgsManager::GetHelpMessage() const
             case OptionsCategory::REGISTER_COMMANDS:
                 usage += HelpMessageGroup("Register Commands:");
                 break;
+            case OptionsCategory::MASTERNODE:
+                usage += HelpMessageGroup("Masternode options:");
+                break;
             default:
                 break;
         }
@@ -720,6 +735,7 @@ fs::path GetDefaultDataDir()
 }
 
 static fs::path g_blocks_path_cache_net_specific;
+static fs::path g_backups_path_cache_net_specific;
 static fs::path pathCached;
 static fs::path pathCachedNetSpecific;
 static RecursiveMutex csPathCached;
@@ -779,6 +795,31 @@ const fs::path &GetDataDir(bool fNetSpecific)
     return path;
 }
 
+const fs::path &GetBackupsDir()
+{
+    LOCK(csPathCached);
+    fs::path &path = g_backups_path_cache_net_specific;
+
+    // Cache the path to avoid calling fs::create_directories on every call of
+    // this function
+    if (!path.empty()) return path;
+
+    if (gArgs.IsArgSet("-walletbackupsdir")) {
+        path = fs::system_complete(gArgs.GetArg("-walletbackupsdir", ""));
+        if (!fs::is_directory(path)) {
+            path = "";
+            return path;
+        }
+    } else {
+        path = GetDataDir(false);
+    }
+
+    path /= BaseParams().DataDir();
+    path /= "backups";
+    fs::create_directories(path);
+    return path;
+}
+
 bool CheckDataDirOption()
 {
     std::string datadir = gArgs.GetArg("-datadir", "");
@@ -797,6 +838,11 @@ void ClearDatadirCache()
 fs::path GetConfigFile(const std::string& confPath)
 {
     return AbsPathForConfigVal(fs::path(confPath), false);
+}
+
+fs::path GetMasternodeConfigFile()
+{
+    return AbsPathForConfigVal(fs::path(gArgs.GetArg("-mnconf", MASTERNODE_CONF_FILENAME)), false);
 }
 
 static std::string TrimString(const std::string& str, const std::string& pattern)

@@ -24,6 +24,8 @@ BITCOIN_INCLUDES=-I$(builddir) $(BDB_CPPFLAGS) $(BOOST_CPPFLAGS) $(LEVELDB_CPPFL
 BITCOIN_INCLUDES += -I$(srcdir)/secp256k1/include
 BITCOIN_INCLUDES += $(UNIVALUE_CFLAGS)
 
+ARGON2D_INCLUDES=-I$(srcdir)/crypto/argon2/include
+
 LIBBITCOIN_SERVER=libbitcoin_server.a
 LIBBITCOIN_COMMON=libbitcoin_common.a
 LIBBITCOIN_CONSENSUS=libbitcoin_consensus.a
@@ -91,11 +93,11 @@ endif
 if BUILD_BITCOIN_TX
   bin_PROGRAMS += bitcoin-tx
 endif
-if ENABLE_WALLET
-if BUILD_BITCOIN_WALLET
-  bin_PROGRAMS += bitcoin-wallet
-endif
-endif
+#if ENABLE_WALLET
+#if BUILD_BITCOIN_WALLET
+#  bin_PROGRAMS += bitcoin-wallet # TODO
+#endif
+#endif
 
 .PHONY: FORCE check-symbols check-security
 # bitcoin core #
@@ -242,7 +244,33 @@ BITCOIN_CORE_H = \
   zmq/zmqconfig.h\
   zmq/zmqnotificationinterface.h \
   zmq/zmqpublishnotifier.h \
-  zmq/zmqrpc.h
+  zmq/zmqrpc.h \
+## --- dash headers start from this line --- ##
+  cachemap.h \
+  cachemultimap.h \
+  governance/governance.h \
+  governance/governance-classes.h \
+  governance/governance-exceptions.h \
+  governance/governance-object.h \
+  governance/governance-validators.h \
+  governance/governance-vote.h \
+  governance/governance-votedb.h \
+  instantx.h \
+  masternode/activemasternode.h \
+  masternode/masternode.h \
+  masternode/masternode-payments.h \
+  masternode/masternode-sync.h \
+  masternode/masternodeconfig.h \
+  masternode/masternodeman.h \
+  messagesigner.h \
+  netfulfilledman.h \
+  privatesend/privatesend.h \
+  privatesend/privatesend-client.h \
+  privatesend/privatesend-server.h \
+  privatesend/privatesend-util.h \
+  spork.h \
+## --- peercoin headers start from this line --- ##
+  kernel.h
 
 
 obj/build.h: FORCE
@@ -304,10 +332,29 @@ libbitcoin_server_a_SOURCES = \
   validation.cpp \
   validationinterface.cpp \
   versionbits.cpp \
+  governance/governance.cpp \
+  governance/governance-classes.cpp \
+  governance/governance-object.cpp \
+  governance/governance-validators.cpp \
+  governance/governance-vote.cpp \
+  governance/governance-votedb.cpp \
+  instantx.cpp \
+  masternode/activemasternode.cpp \
+  masternode/masternode.cpp \
+  masternode/masternode-payments.cpp \
+  masternode/masternode-sync.cpp \
+  masternode/masternodeconfig.cpp \
+  masternode/masternodeman.cpp \
+  messagesigner.cpp \
+  netfulfilledman.cpp \
+  privatesend/privatesend.cpp \
+  privatesend/privatesend-server.cpp \
+  spork.cpp \
+  kernel.cpp \
   $(BITCOIN_CORE_H)
 
 if ENABLE_WALLET
-libbitcoin_server_a_SOURCES += wallet/init.cpp
+libbitcoin_server_a_SOURCES += wallet/init.cpp privatesend/privatesend-client.cpp privatesend/privatesend-util.cpp
 endif
 if !ENABLE_WALLET
 libbitcoin_server_a_SOURCES += dummywallet.cpp
@@ -353,7 +400,7 @@ libbitcoin_wallet_tool_a_SOURCES = \
   $(BITCOIN_CORE_H)
 
 # crypto primitives library
-crypto_libbitcoin_crypto_base_a_CPPFLAGS = $(AM_CPPFLAGS)
+crypto_libbitcoin_crypto_base_a_CPPFLAGS = $(AM_CPPFLAGS) $(ARGON2D_INCLUDES)
 crypto_libbitcoin_crypto_base_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 crypto_libbitcoin_crypto_base_a_SOURCES = \
   crypto/aes.cpp \
@@ -380,7 +427,37 @@ crypto_libbitcoin_crypto_base_a_SOURCES = \
   crypto/sha512.cpp \
   crypto/sha512.h \
   crypto/siphash.cpp \
-  crypto/siphash.h
+  crypto/siphash.h \
+## --- scrypt hash --- ##
+  crypto/scrypt.cpp \
+  crypto/scrypt-sse2.cpp \
+  crypto/scrypt.h \
+## --- quark hash --- ##
+  crypto/blake.c \
+  crypto/sph_blake.h \
+  crypto/bmw.c \
+  crypto/sph_bmw.h \
+  crypto/groestl.c \
+  crypto/sph_groestl.h \
+  crypto/jh.c \
+  crypto/sph_jh.h \
+  crypto/keccak.c \
+  crypto/sph_keccak.h \
+  crypto/skein.c \
+  crypto/sph_skein.h \
+  crypto/sph_types.h \
+## --- argon2 hash --- ##
+  crypto/argon2_best.c \
+  crypto/argon2/src/argon2.c \
+  crypto/argon2/include/argon2.h \
+  crypto/argon2/src/blake2/blake2b.c \
+  crypto/argon2/src/blake2/blake2.h \
+  crypto/argon2/src/core.c \
+  crypto/argon2/src/core.h \
+  crypto/argon2/src/encoding.c \
+  crypto/argon2/src/encoding.h \
+  crypto/argon2/src/thread.c \
+  crypto/argon2/src/thread.h
 
 if USE_ASM
 crypto_libbitcoin_crypto_base_a_SOURCES += crypto/sha256_sse4.cpp
@@ -632,8 +709,8 @@ if GLIBC_BACK_COMPAT
 endif
 
 libbitcoinconsensus_la_LDFLAGS = $(AM_LDFLAGS) -no-undefined $(RELDFLAGS)
-libbitcoinconsensus_la_LIBADD = $(LIBSECP256K1)
-libbitcoinconsensus_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(builddir)/obj -I$(srcdir)/secp256k1/include -DBUILD_BITCOIN_INTERNAL
+libbitcoinconsensus_la_LIBADD = $(LIBSECP256K1) $(CRYPTO_LIBS)
+libbitcoinconsensus_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(builddir)/obj -I$(srcdir)/secp256k1/include -DBUILD_BITCOIN_INTERNAL $(ARGON2D_INCLUDES)
 libbitcoinconsensus_la_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 endif
@@ -644,6 +721,11 @@ CTAES_DIST += crypto/ctaes/ctaes.c
 CTAES_DIST += crypto/ctaes/ctaes.h
 CTAES_DIST += crypto/ctaes/README.md
 CTAES_DIST += crypto/ctaes/test.c
+
+ARGON2D_DIST = crypto/argon2/src/ref.c
+ARGON2D_DIST += crypto/argon2/src/opt.c
+ARGON2D_DIST += crypto/argon2/src/blake2/blamka-round-opt.h
+ARGON2D_DIST += crypto/argon2/src/blake2/blamka-round-ref.h
 
 CLEANFILES = $(EXTRA_LIBRARIES)
 
@@ -661,7 +743,7 @@ CLEANFILES += wallet/test/*.gcda wallet/test/*.gcno
 CLEANFILES += zmq/*.gcda zmq/*.gcno
 CLEANFILES += obj/build.h
 
-EXTRA_DIST = $(CTAES_DIST)
+EXTRA_DIST = $(CTAES_DIST) #$(ARGON2D_DIST)
 
 
 config/bitcoin-config.h: config/stamp-h1

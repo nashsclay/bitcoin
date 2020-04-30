@@ -23,6 +23,8 @@ public:
     CTxDestination destChange;
     //! Override the default change type if set, ignored if destChange is set
     boost::optional<OutputType> m_change_type;
+    bool fUsePrivateSend;
+    bool fUseInstantSend;
     //! If false, allows unselected inputs, but requires all selected inputs be used
     bool fAllowOtherInputs;
     //! Includes watch only addresses which are solvable

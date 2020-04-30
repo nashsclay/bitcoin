@@ -38,7 +38,23 @@
 // Application startup time (used for uptime calculation)
 int64_t GetStartupTime();
 
+// Uncomment the following line to enable debugging messages
+// or enable on a per file basis prior to inclusion of util.h
+//#define ENABLE_DASH_DEBUG
+#ifdef ENABLE_DASH_DEBUG
+#define DBG( x ) x
+#else
+#define DBG( x ) 
+#endif
+
+//Dash only features
+
+extern bool fMasternodeMode;
+extern bool fLiteMode;
+extern int nWalletBackups;
+
 extern const char * const BITCOIN_CONF_FILENAME;
+extern const char * const MASTERNODE_CONF_FILENAME;
 
 void SetupEnvironment();
 bool SetupNetworking();
@@ -71,11 +87,13 @@ fs::path GetDefaultDataDir();
 // The blocks directory is always net specific.
 const fs::path &GetBlocksDir();
 const fs::path &GetDataDir(bool fNetSpecific = true);
+const fs::path &GetBackupsDir();
 // Return true if -datadir option points to a valid directory or is not specified.
 bool CheckDataDirOption();
 /** Tests only */
 void ClearDatadirCache();
 fs::path GetConfigFile(const std::string& confPath);
+fs::path GetMasternodeConfigFile();
 #ifdef WIN32
 fs::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
@@ -116,6 +134,7 @@ enum class OptionsCategory {
     GUI,
     COMMANDS,
     REGISTER_COMMANDS,
+    MASTERNODE,
 
     HIDDEN // Always the last option to avoid printing these in the help
 };
