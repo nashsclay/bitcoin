@@ -4,17 +4,17 @@
 
 #include "privatesend-server.h"
 
-#include "activemasternode.h"
+#include "masternode/activemasternode.h"
 #include "consensus/validation.h"
 #include "core_io.h"
 #include "init.h"
-#include "masternode-sync.h"
-#include "masternodeman.h"
+#include "masternode/masternode-sync.h"
+#include "masternode/masternodeman.h"
 #include "netmessagemaker.h"
 #include "script/interpreter.h"
 #include "txmempool.h"
-#include "util.h"
-#include "utilmoneystr.h"
+#include "util/system.h"
+#include "util/moneystr.h"
 
 CPrivateSendServer privateSendServer;
 

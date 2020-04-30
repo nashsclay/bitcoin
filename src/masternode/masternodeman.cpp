@@ -4,10 +4,9 @@
 
 #include "activemasternode.h"
 #include "addrman.h"
-#include "alert.h"
 #include "clientversion.h"
 #include "init.h"
-#include "governance.h"
+#include "governance/governance.h"
 #include "masternode-payments.h"
 #include "masternode-sync.h"
 #include "masternodeman.h"
@@ -15,15 +14,12 @@
 #include "netfulfilledman.h"
 #include "netmessagemaker.h"
 #ifdef ENABLE_WALLET
-#include "privatesend-client.h"
+#include "privatesend/privatesend-client.h"
 #endif // ENABLE_WALLET
 #include "script/standard.h"
 #include "ui_interface.h"
-#include "util.h"
+#include "util/system.h"
 #include "warnings.h"
-
-#include "evo/deterministicmns.h"
-#include "evo/providertx.h"
 
 /** Masternode manager */
 CMasternodeMan mnodeman;

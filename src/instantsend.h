@@ -8,8 +8,6 @@
 #include "net.h"
 #include "primitives/transaction.h"
 
-#include "evo/deterministicmns.h"
-
 class CTxLockVote;
 class COutPointLock;
 class CTxLockRequest;

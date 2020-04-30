@@ -5,7 +5,6 @@
 #ifndef PRIVATESEND_H
 #define PRIVATESEND_H
 
-#include "bls/bls.h"
 #include "chain.h"
 #include "chainparams.h"
 #include "primitives/transaction.h"

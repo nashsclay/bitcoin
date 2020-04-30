@@ -3,7 +3,6 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "activemasternode.h"
-#include "evo/deterministicmns.h"
 #include "init.h"
 #include "masternode-sync.h"
 #include "masternode.h"

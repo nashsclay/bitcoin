@@ -3,7 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "activemasternode.h"
-#include "governance.h"
+#include "governance/governance.h"
 #include "init.h"
 #include "validation.h"
 #include "masternode-payments.h"
@@ -12,7 +12,6 @@
 #include "netfulfilledman.h"
 #include "netmessagemaker.h"
 #include "ui_interface.h"
-#include "evo/deterministicmns.h"
 
 class CMasternodeSync;
 CMasternodeSync masternodeSync;

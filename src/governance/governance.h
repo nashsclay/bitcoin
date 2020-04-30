@@ -17,9 +17,7 @@
 #include "net.h"
 #include "sync.h"
 #include "timedata.h"
-#include "util.h"
-
-#include "evo/deterministicmns.h"
+#include "util/system.h"
 
 #include <univalue.h>
 

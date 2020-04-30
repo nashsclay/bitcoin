@@ -4,10 +4,10 @@
 
 #include "governance-vote.h"
 #include "governance-object.h"
-#include "masternode-sync.h"
-#include "masternodeman.h"
+#include "masternode/masternode-sync.h"
+#include "masternode/masternodeman.h"
 #include "messagesigner.h"
-#include "util.h"
+#include "util/system.h"
 
 std::string CGovernanceVoting::ConvertOutcomeToString(vote_outcome_enum_t nOutcome)
 {

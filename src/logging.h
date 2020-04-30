@@ -55,6 +55,13 @@ namespace BCLog {
         QT          = (1 << 19),
         LEVELDB     = (1 << 20),
         VALIDATION  = (1 << 21),
+        SPORK       = (1 << 22),
+        MNSYNC      = (1 << 23),
+        MASTERNODE  = (1 << 24),
+        GOBJECT     = (1 << 25),
+        MNPAYMENTS  = (1 << 26),
+        INSTANTSEND = (1 << 27),
+        PRIVATESEND = (1 << 28),
         ALL         = ~(uint32_t)0,
     };
 

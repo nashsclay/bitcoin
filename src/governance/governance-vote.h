@@ -7,7 +7,6 @@
 
 #include "key.h"
 #include "primitives/transaction.h"
-#include "bls/bls.h"
 
 class CGovernanceVote;
 class CConnman;

@@ -4,7 +4,7 @@
 
 #include "activemasternode.h"
 #include "consensus/validation.h"
-#include "governance-classes.h"
+#include "governance/governance-classes.h"
 #include "init.h"
 #include "masternode-payments.h"
 #include "masternode-sync.h"
@@ -13,9 +13,7 @@
 #include "netfulfilledman.h"
 #include "netmessagemaker.h"
 #include "spork.h"
-#include "util.h"
-
-#include "evo/deterministicmns.h"
+#include "util/system.h"
 
 #include <string>
 

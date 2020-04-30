@@ -9,14 +9,14 @@
 #include "governance-validators.h"
 #include "governance-vote.h"
 #include "init.h"
-#include "masternode-sync.h"
-#include "masternode.h"
-#include "masternodeman.h"
+#include "masternode/masternode-sync.h"
+#include "masternode/masternode.h"
+#include "masternode/masternodeman.h"
 #include "messagesigner.h"
 #include "net_processing.h"
 #include "netfulfilledman.h"
 #include "netmessagemaker.h"
-#include "util.h"
+#include "util/system.h"
 #include "validationinterface.h"
 
 CGovernanceManager governance;

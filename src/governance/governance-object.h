@@ -14,9 +14,8 @@
 #include "key.h"
 #include "net.h"
 #include "sync.h"
-#include "util.h"
-#include "utilstrencodings.h"
-#include "bls/bls.h"
+#include "util/system.h"
+#include "util/strencodings.h"
 
 #include <univalue.h>
 

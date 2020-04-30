@@ -8,9 +8,6 @@
 #include "key.h"
 #include "validation.h"
 #include "spork.h"
-#include "bls/bls.h"
-
-#include "evo/deterministicmns.h"
 
 class CMasternode;
 class CMasternodeBroadcast;

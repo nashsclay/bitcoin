@@ -11,9 +11,6 @@
 #include "primitives/transaction.h"
 #include "validationinterface.h"
 
-#include "evo/deterministicmns.h"
-#include "evo/providertx.h"
-
 struct CActiveMasternodeInfo;
 class CActiveLegacyMasternodeManager;
 class CActiveDeterministicMasternodeManager;

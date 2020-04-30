@@ -10,7 +10,7 @@
 #include "governance.h"
 #include "key.h"
 #include "script/standard.h"
-#include "util.h"
+#include "util/system.h"
 
 class CSuperblock;
 class CGovernanceTriggerManager;
