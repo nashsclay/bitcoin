@@ -402,7 +402,7 @@ void CPrivateSendServer::ChargeFees(CConnman& connman)
 {
     if(!fMasternodeMode) return;
 
-    //we don't need to charge collateral for every offence.
+    //we don't need to charge collateral for every offense.
     if(GetRandInt(100) > 33) return;
 
     std::vector<CTransactionRef> vecOffendersCollaterals;
@@ -416,7 +416,7 @@ void CPrivateSendServer::ChargeFees(CConnman& connman)
 
             // This queue entry didn't send us the promised transaction
             if(!fFound) {
-                LogPrintf("CPrivateSendServer::ChargeFees -- found uncooperative node (didn't send transaction), found offence\n");
+                LogPrintf("CPrivateSendServer::ChargeFees -- found uncooperative node (didn't send transaction), found offense\n");
                 vecOffendersCollaterals.push_back(txCollateral);
             }
         }
@@ -427,14 +427,14 @@ void CPrivateSendServer::ChargeFees(CConnman& connman)
         for (const auto& entry : vecEntries) {
             for (const auto& txdsin : entry.vecTxDSIn) {
                 if(!txdsin.fHasSig) {
-                    LogPrintf("CPrivateSendServer::ChargeFees -- found uncooperative node (didn't sign), found offence\n");
+                    LogPrintf("CPrivateSendServer::ChargeFees -- found uncooperative node (didn't sign), found offense\n");
                     vecOffendersCollaterals.push_back(entry.txCollateral);
                 }
             }
         }
     }
 
-    // no offences found
+    // no offenses found
     if(vecOffendersCollaterals.empty()) return;
 
     //mostly offending? Charge sometimes

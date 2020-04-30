@@ -3547,8 +3547,8 @@ static bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state,
 {
     static int64_t nBlockCheckTime = 0;
 
-    //if (nBlockCheckTime == 0)
-        //nBlockCheckTime = GetTime() - (2 * 24 * 60 * 60); // check the past 2 days worth of headers
+    if (nBlockCheckTime == 0)
+        nBlockCheckTime = GetTime() - (2 * 24 * 60 * 60); // Check the past 2 days worth of headers
 
     const int algo = CBlockHeader::GetAlgo(block.nVersion);
     if ((block.nVersion >= consensusParams.nUpgradeBlockVersion[0] && algo == -1) || (block.IsProofOfStake() && block.nNonce != 0))

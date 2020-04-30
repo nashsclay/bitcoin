@@ -36,10 +36,10 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
 
     if (pindexLast->nHeight+1 >= params.nMandatoryUpgradeBlock[1] && params.fPowAllowMinDifficultyBlocks && algo != -1) {
         // Special difficulty rule:
-        // If the new block's timestamp is more than 2* 10 minutes
+        // If the new block's timestamp is more than 30 minutes (be careful to ensure this is at least twice the actual PoW target spacing to avoid interfering with retargeting)
         // then allow mining of a min-difficulty block.
         const CBlockIndex* pindexPrev = GetLastBlockIndexForAlgo(pindexLast, algo);
-        if (pindexPrev->nHeight > 100 && pblock->GetBlockTime() > pindexPrev->GetBlockTime() + (20*60))
+        if (pindexPrev->nHeight > 100 && pblock->GetBlockTime() > pindexPrev->GetBlockTime() + (30*60))
             return nProofOfWorkLimit;
         if (pindexPrev->pprev && pindexPrev->nBits == nProofOfWorkLimit) {
             // Return the block before the last non-special-min-difficulty-rules-block
