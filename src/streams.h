@@ -68,7 +68,7 @@ public:
  */
 class CVectorWriter
 {
- public:
+public:
 
 /*
  * @param[in]  nTypeIn Serialization Type
