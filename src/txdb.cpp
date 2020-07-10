@@ -275,8 +275,24 @@ bool CBlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, 
                 pindexNew->nStatus        = diskindex.nStatus;
                 pindexNew->nTx            = diskindex.nTx;
 
-                if (!CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nBits, consensusParams))
-                    return error("%s: CheckProofOfWork failed: %s", __func__, pindexNew->ToString());
+                // peercoin related block index fields
+                pindexNew->nMint          = diskindex.nMint;
+                pindexNew->nMoneySupply   = diskindex.nMoneySupply;
+                pindexNew->nFlags         = diskindex.nFlags;
+                pindexNew->nStakeModifier = diskindex.nStakeModifier;
+                pindexNew->nStakeModifierV2 = diskindex.nStakeModifierV2;
+                pindexNew->nTreasuryPayment = diskindex.nTreasuryPayment;
+                //pindexNew->prevoutStake   = diskindex.prevoutStake;
+                //pindexNew->nStakeTime     = diskindex.nStakeTime;
+                //pindexNew->hashProofOfStake = diskindex.hashProofOfStake;
+
+                // Treat PoW and PoS blocks the same - don't waste time on redundant PoW checks that won't catch invalid PoS blocks anyway
+                const int algo = CBlockHeader::GetAlgo(pindexNew->nVersion);
+                if (pindexNew->IsProofOfWork() && algo != CBlockHeader::ALGO_POW_SCRYPT_SQUARED) {
+                    uint256 hash = pindexNew->GetBlockHeader().GetPoWHash();
+                    if (hash != uint256S("0xf4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf") && !CheckProofOfWork(hash, pindexNew->nBits, algo, consensusParams))
+                        return error("%s: CheckProofOfWork failed: %s", __func__, pindexNew->ToString());
+                }
 
                 pcursor->Next();
             } else {
@@ -388,7 +404,7 @@ bool CCoinsViewDB::Upgrade() {
             COutPoint outpoint(key.second, 0);
             for (size_t i = 0; i < old_coins.vout.size(); ++i) {
                 if (!old_coins.vout[i].IsNull() && !old_coins.vout[i].scriptPubKey.IsUnspendable()) {
-                    Coin newcoin(std::move(old_coins.vout[i]), old_coins.nHeight, old_coins.fCoinBase);
+                    Coin newcoin(std::move(old_coins.vout[i]), old_coins.nHeight, old_coins.fCoinBase, false, 0);
                     outpoint.n = i;
                     CoinEntry entry(&outpoint);
                     batch.Write(entry, newcoin);

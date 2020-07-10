@@ -6,12 +6,15 @@
 #ifndef BITCOIN_UNDO_H
 #define BITCOIN_UNDO_H
 
+#include <chainparams.h>
 #include <coins.h>
 #include <compressor.h>
 #include <consensus/consensus.h>
 #include <primitives/transaction.h>
 #include <serialize.h>
 #include <version.h>
+
+#include <bitset>
 
 /** Formatter for undo information for a CTxIn
  *
@@ -24,28 +27,39 @@ struct TxInUndoFormatter
 {
     template<typename Stream>
     void Ser(Stream &s, const Coin& txout) {
-        ::Serialize(s, VARINT(txout.nHeight * uint32_t{2} + txout.fCoinBase ));
-        if (txout.nHeight > 0) {
+        std::bitset<32> nCode(txout.nHeight);
+        nCode[30] = txout.fCoinStake;
+        nCode[31] = txout.fCoinBase;
+        ::Serialize(s, VARINT(nCode.to_ulong()));
+        /*if (txout.nHeight > 0) {
             // Required to maintain compatibility with older undo format.
             ::Serialize(s, (unsigned char)0);
-        }
+        }*/
         ::Serialize(s, Using<TxOutCompression>(txout.out));
+        if (txout.nHeight < Params().GetConsensus().nMandatoryUpgradeBlock[0])
+            ::Serialize(s, VARINT(txout.nTime));
     }
 
     template<typename Stream>
     void Unser(Stream &s, Coin& txout) {
         uint32_t nCode = 0;
         ::Unserialize(s, VARINT(nCode));
-        txout.nHeight = nCode >> 1;
-        txout.fCoinBase = nCode & 1;
-        if (txout.nHeight > 0) {
+        std::bitset<32> bitset(nCode);
+        txout.fCoinStake = bitset[30];
+        txout.fCoinBase = bitset[31];
+        bitset.reset(30);
+        bitset.reset(31);
+        txout.nHeight = bitset.to_ulong();
+        /*if (txout.nHeight > 0) {
             // Old versions stored the version number for the last spend of
             // a transaction's outputs. Non-final spends were indicated with
             // height = 0.
             unsigned int nVersionDummy;
             ::Unserialize(s, VARINT(nVersionDummy));
-        }
+        }*/
         ::Unserialize(s, Using<TxOutCompression>(txout.out));
+        if (txout.nHeight < Params().GetConsensus().nMandatoryUpgradeBlock[0])
+            ::Unserialize(s, VARINT(txout.nTime));
     }
 };
 

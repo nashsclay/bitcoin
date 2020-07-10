@@ -14,6 +14,7 @@
 #include <core_io.h>
 #include <hash.h>
 #include <index/blockfilterindex.h>
+#include <kernel.h>
 #include <node/coinstats.h>
 #include <node/context.h>
 #include <node/utxo_snapshot.h>
@@ -107,7 +108,7 @@ UniValue blockheaderToJSON(const CBlockIndex* tip, const CBlockIndex* blockindex
     int confirmations = ComputeNextBlockAndDepth(tip, blockindex, pnext);
     result.pushKV("confirmations", confirmations);
     result.pushKV("height", blockindex->nHeight);
-    result.pushKV("version", blockindex->nVersion);
+    result.pushKV("version", (uint64_t)blockindex->nVersion);
     result.pushKV("versionHex", strprintf("%08x", blockindex->nVersion));
     result.pushKV("merkleroot", blockindex->hashMerkleRoot.GetHex());
     result.pushKV("time", (int64_t)blockindex->nTime);
@@ -139,7 +140,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* tip, const CBlockIn
     result.pushKV("size", (int)::GetSerializeSize(block, PROTOCOL_VERSION));
     result.pushKV("weight", (int)::GetBlockWeight(block));
     result.pushKV("height", blockindex->nHeight);
-    result.pushKV("version", block.nVersion);
+    result.pushKV("version", (uint64_t)block.nVersion);
     result.pushKV("versionHex", strprintf("%08x", block.nVersion));
     result.pushKV("merkleroot", block.hashMerkleRoot.GetHex());
     UniValue txs(UniValue::VARR);
@@ -167,6 +168,59 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* tip, const CBlockIn
         result.pushKV("previousblockhash", blockindex->pprev->GetBlockHash().GetHex());
     if (pnext)
         result.pushKV("nextblockhash", pnext->GetBlockHash().GetHex());
+
+    result.pushKV("type", CBlockHeader::GetAlgo(blockindex->nVersion) == -1 ? blockindex->IsProofOfWork() : CBlockHeader::GetAlgo(blockindex->nVersion));
+    result.pushKV("modifier", strprintf("%016x", blockindex->nStakeModifier));
+    result.pushKV("modifierV2", blockindex->nStakeModifierV2.GetHex());
+    result.pushKV("mint", ValueFromAmount(blockindex->nMint));
+    result.pushKV("moneysupply", ValueFromAmount(blockindex->nMoneySupply));
+    result.pushKV("treasurypayment", ValueFromAmount(blockindex->nTreasuryPayment));
+
+    if (blockindex->IsProofOfStake()) {
+        result.pushKV("proof", "stake");
+        const COutPoint& prevout = block.vtx[1]->vin[0].prevout;
+
+        const Consensus::Params& params = Params().GetConsensus();
+        uint256 hashBlock;
+        CTransactionRef txPrev;
+        if (GetTransaction(prevout.hash, txPrev, params, hashBlock)) {
+            const CBlockIndex* pindexFrom = nullptr;
+            {
+                LOCK(cs_main);
+                pindexFrom = LookupBlockIndex(hashBlock);
+            }
+            if (pindexFrom) {
+                uint256 hashProofOfStake;
+                unsigned int nTimeBlockFrom = blockindex->nHeight >= params.nMandatoryUpgradeBlock[0] ? pindexFrom->GetBlockTime() : txPrev->nTime;
+                int nHeightBlockFrom = pindexFrom->nHeight;
+
+                CDataStream ss(SER_GETHASH, 0);
+                uint64_t nStakeModifier = 0;
+                uint256 nStakeModifierV2 = uint256();
+                int nStakeModifierHeight = 0;
+                int64_t nStakeModifierTime = 0;
+
+                if (GetKernelStakeModifier(blockindex->pprev, hashBlock, blockindex->GetBlockTime(), params, nStakeModifier, nStakeModifierV2, nStakeModifierHeight, nStakeModifierTime, false)) {
+                    if (blockindex->pprev->UsesStakeModifierV2())
+                        ss << nStakeModifierV2;
+                    else
+                        ss << nStakeModifier;
+                    hashProofOfStake = stakeHash(blockindex->GetBlockTime(), ss, prevout.n, prevout.hash, nTimeBlockFrom, blockindex->nHeight >= params.nMandatoryUpgradeBlock[0]);
+
+                    UniValue stakeData(UniValue::VOBJ);
+                    stakeData.pushKV("proofhash", hashProofOfStake.GetHex());
+                    stakeData.pushKV("blockfromhash", hashBlock.GetHex());
+                    stakeData.pushKV("blockfromheight", nHeightBlockFrom);
+                    stakeData.pushKV("stakemodifierheight", nStakeModifierHeight);
+                    result.pushKV("coinstake", stakeData);
+                }
+            }
+        }
+    } else {
+        result.pushKV("proof", "work");
+        result.pushKV("proofhash", block.GetPoWHash().GetHex());
+    }
+
     return result;
 }
 
@@ -1895,7 +1949,7 @@ static UniValue getblockstats(const JSONRPCRequest& request)
     ret_all.pushKV("minfeerate", (minfeerate == MAX_MONEY) ? 0 : minfeerate);
     ret_all.pushKV("mintxsize", mintxsize == MAX_BLOCK_SERIALIZED_SIZE ? 0 : mintxsize);
     ret_all.pushKV("outs", outputs);
-    ret_all.pushKV("subsidy", GetBlockSubsidy(pindex->nHeight, Params().GetConsensus()));
+    ret_all.pushKV("subsidy", pindex->nMint);
     ret_all.pushKV("swtotal_size", swtotal_size);
     ret_all.pushKV("swtotal_weight", swtotal_weight);
     ret_all.pushKV("swtxs", swtxs);

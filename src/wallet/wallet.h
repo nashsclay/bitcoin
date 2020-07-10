@@ -551,6 +551,7 @@ public:
     const uint256& GetHash() const { return tx->GetHash(); }
     bool IsCoinBase() const { return tx->IsCoinBase(); }
     bool IsImmatureCoinBase() const;
+    bool IsCoinStake() const { return tx->IsCoinStake(); }
 };
 
 class COutput
