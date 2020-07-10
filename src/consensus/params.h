@@ -6,6 +6,7 @@
 #ifndef BITCOIN_CONSENSUS_PARAMS_H
 #define BITCOIN_CONSENSUS_PARAMS_H
 
+#include <primitives/block.h>
 #include <uint256.h>
 #include <limits>
 
@@ -45,6 +46,17 @@ struct BIP9Deployment {
 struct Params {
     uint256 hashGenesisBlock;
     int nSubsidyHalvingInterval;
+    int nBudgetPaymentsStartBlock;
+    int64_t nMasternodeCollateral[3];
+    int nPoSStartBlock;
+    int nLastPoWBlock;
+    int nMandatoryUpgradeBlock[2];
+    uint32_t nUpgradeBlockVersion[2];
+    int nTreasuryPaymentsStartBlock;
+    int nTreasuryPaymentsCycleBlocks;
+    std::map<CScript, int> mTreasuryPayees;
+    uint32_t nBadScryptDiffStartTime;
+    uint32_t nBadScryptDiffEndTime;
     /* Block hash that is excepted from BIP16 enforcement */
     uint256 BIP16Exception;
     /** Block height and hash at which BIP34 becomes active */
@@ -72,7 +84,7 @@ struct Params {
     uint32_t nMinerConfirmationWindow;
     BIP9Deployment vDeployments[MAX_VERSION_BITS_DEPLOYMENTS];
     /** Proof of work parameters */
-    uint256 powLimit;
+    uint256 powLimit[CBlockHeader::ALGO_COUNT];
     bool fPowAllowMinDifficultyBlocks;
     bool fPowNoRetargeting;
     int64_t nPowTargetSpacing;
@@ -80,6 +92,13 @@ struct Params {
     int64_t DifficultyAdjustmentInterval() const { return nPowTargetTimespan / nPowTargetSpacing; }
     uint256 nMinimumChainWork;
     uint256 defaultAssumeValid;
+
+    /** peercoin stuff */
+    int nStakeTimestampMask;
+    int nStakeMinDepth[2];
+    int64_t nStakeMinAge[2];
+    int64_t nStakeMaxAge[2];
+    int64_t nModifierInterval;
 };
 } // namespace Consensus
 
