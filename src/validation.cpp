@@ -3595,7 +3595,11 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
 
     // Check transactions
     // Must check for duplicate inputs (see CVE-2018-17144)
+    bool fEnforceNewTransactionVersion = block.nVersion >= consensusParams.nUpgradeBlockVersion[0] && block.GetHash() != consensusParams.hashGenesisBlock;
     for (const auto& tx : block.vtx) {
+        if (tx->nVersion < CTransaction::FIRST_FORK_VERSION && fEnforceNewTransactionVersion)
+            return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-tx-version", strprintf("transaction %s has invalid version %i", tx->GetHash().ToString(), tx->nVersion));
+
         TxValidationState tx_state;
         if (!CheckTransaction(*tx, tx_state)) {
             // CheckBlock() does context-free validation checks. The only

@@ -63,7 +63,7 @@ static void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& 
         if (pindex) {
             if (::ChainActive().Contains(pindex)) {
                 entry.pushKV("confirmations", 1 + ::ChainActive().Height() - pindex->nHeight);
-                entry.pushKV("time", pindex->GetBlockTime());
+                entry.pushKV("time", tx.nTime ? (int64_t)tx.nTime : pindex->GetBlockTime());
                 entry.pushKV("blocktime", pindex->GetBlockTime());
             }
             else

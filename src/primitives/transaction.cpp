@@ -6,6 +6,7 @@
 #include <primitives/transaction.h>
 
 #include <hash.h>
+#include <streams.h>
 #include <tinyformat.h>
 #include <util/strencodings.h>
 
@@ -56,12 +57,21 @@ std::string CTxOut::ToString() const
     return strprintf("CTxOut(nValue=%d.%08d, scriptPubKey=%s)", nValue / COIN, nValue % COIN, HexStr(scriptPubKey).substr(0, 30));
 }
 
-CMutableTransaction::CMutableTransaction() : nVersion(CTransaction::CURRENT_VERSION), nLockTime(0) {}
-CMutableTransaction::CMutableTransaction(const CTransaction& tx) : vin(tx.vin), vout(tx.vout), nVersion(tx.nVersion), nLockTime(tx.nLockTime) {}
+CMutableTransaction::CMutableTransaction() : nVersion(CTransaction::CURRENT_VERSION), nTime(0), nLockTime(0) {}
+CMutableTransaction::CMutableTransaction(const CTransaction& tx) : vin(tx.vin), vout(tx.vout), nVersion(tx.nVersion), nTime(tx.nTime), nLockTime(tx.nLockTime) {}
 
 uint256 CMutableTransaction::GetHash() const
 {
-    return SerializeHash(*this, SER_GETHASH, SERIALIZE_TRANSACTION_NO_WITNESS);
+    if (nVersion >= CTransaction::SECOND_FORK_VERSION) {
+        CDataStream ss(SER_GETHASH, SERIALIZE_TRANSACTION_NO_WITNESS);
+        ss << *this;
+        return HashQuark((const char*)ss.data(), (const char*)ss.data() + ss.size());
+    } else {
+        //CDataStream ss(SER_GETHASH, SERIALIZE_TRANSACTION_NO_WITNESS);
+        //ss << *this;
+        //return Hash((const char*)ss.data(), (const char*)ss.data() + ss.size());
+        return SerializeHash(*this, SER_GETHASH, SERIALIZE_TRANSACTION_NO_WITNESS);
+    }
 }
 
 std::string CMutableTransaction::ToString() const
@@ -85,7 +95,16 @@ std::string CMutableTransaction::ToString() const
 
 uint256 CTransaction::ComputeHash() const
 {
-    return SerializeHash(*this, SER_GETHASH, SERIALIZE_TRANSACTION_NO_WITNESS);
+    if (nVersion >= CTransaction::SECOND_FORK_VERSION) {
+        CDataStream ss(SER_GETHASH, SERIALIZE_TRANSACTION_NO_WITNESS);
+        ss << *this;
+        return HashQuark((const char*)ss.data(), (const char*)ss.data() + ss.size());
+    } else {
+        //CDataStream ss(SER_GETHASH, SERIALIZE_TRANSACTION_NO_WITNESS);
+        //ss << *this;
+        //return Hash((const char*)ss.data(), (const char*)ss.data() + ss.size());
+        return SerializeHash(*this, SER_GETHASH, SERIALIZE_TRANSACTION_NO_WITNESS);
+    }
 }
 
 uint256 CTransaction::ComputeWitnessHash() const
@@ -93,13 +112,22 @@ uint256 CTransaction::ComputeWitnessHash() const
     if (!HasWitness()) {
         return hash;
     }
-    return SerializeHash(*this, SER_GETHASH, 0);
+    if (nVersion >= CTransaction::SECOND_FORK_VERSION) {
+        CDataStream ss(SER_GETHASH, 0);
+        ss << *this;
+        return HashQuark((const char*)ss.data(), (const char*)ss.data() + ss.size());
+    } else {
+        //CDataStream ss(SER_GETHASH, 0);
+        //ss << *this;
+        //return Hash((const char*)ss.data(), (const char*)ss.data() + ss.size());
+        return SerializeHash(*this, SER_GETHASH, 0);
+    }
 }
 
 /* For backward compatibility, the hash is initialized to 0. TODO: remove the need for this default constructor entirely. */
-CTransaction::CTransaction() : vin(), vout(), nVersion(CTransaction::CURRENT_VERSION), nLockTime(0), hash{}, m_witness_hash{} {}
-CTransaction::CTransaction(const CMutableTransaction& tx) : vin(tx.vin), vout(tx.vout), nVersion(tx.nVersion), nLockTime(tx.nLockTime), hash{ComputeHash()}, m_witness_hash{ComputeWitnessHash()} {}
-CTransaction::CTransaction(CMutableTransaction&& tx) : vin(std::move(tx.vin)), vout(std::move(tx.vout)), nVersion(tx.nVersion), nLockTime(tx.nLockTime), hash{ComputeHash()}, m_witness_hash{ComputeWitnessHash()} {}
+CTransaction::CTransaction() : vin(), vout(), nVersion(CTransaction::CURRENT_VERSION), nTime(0), nLockTime(0), hash{}, m_witness_hash{} {}
+CTransaction::CTransaction(const CMutableTransaction& tx) : vin(tx.vin), vout(tx.vout), nVersion(tx.nVersion), nTime(tx.nTime), nLockTime(tx.nLockTime), hash{ComputeHash()}, m_witness_hash{ComputeWitnessHash()} {}
+CTransaction::CTransaction(CMutableTransaction&& tx) : vin(std::move(tx.vin)), vout(std::move(tx.vout)), nVersion(tx.nVersion), nTime(tx.nTime), nLockTime(tx.nLockTime), hash{ComputeHash()}, m_witness_hash{ComputeWitnessHash()} {}
 
 CAmount CTransaction::GetValueOut() const
 {

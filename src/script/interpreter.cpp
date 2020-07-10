@@ -1231,6 +1231,9 @@ public:
     void Serialize(S &s) const {
         // Serialize nVersion
         ::Serialize(s, txTo.nVersion);
+        // Serialize nTime
+        if (txTo.nVersion < CTransaction::FIRST_FORK_VERSION)
+            ::Serialize(s, txTo.nTime);
         // Serialize vin
         unsigned int nInputs = fAnyoneCanPay ? 1 : txTo.vin.size();
         ::WriteCompactSize(s, nInputs);
@@ -1299,7 +1302,7 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
 {
     assert(nIn < txTo.vin.size());
 
-    if (sigversion == SigVersion::WITNESS_V0) {
+    if (sigversion == SigVersion::WITNESS_V0 || (sigversion == SigVersion::BASE && txTo.nVersion >= CTransaction::SECOND_FORK_VERSION)) {
         uint256 hashPrevouts;
         uint256 hashSequence;
         uint256 hashOutputs;
