@@ -14,6 +14,7 @@
 #include <interfaces/node.h>
 #include <net.h>
 #include <netbase.h>
+#include <uint256.h>
 #include <util/system.h>
 
 #include <stdint.h>
@@ -226,7 +227,7 @@ static void BannedListChanged(ClientModel *clientmodel)
     assert(invoked);
 }
 
-static void BlockTipChanged(ClientModel *clientmodel, bool initialSync, int height, int64_t blockTime, double verificationProgress, bool fHeader)
+static void BlockTipChanged(ClientModel *clientmodel, bool initialSync, int height, int64_t blockTime, uint256 blockHash, double verificationProgress, bool fHeader)
 {
     // lock free async UI updates in case we have a new block tip
     // during initial sync, only update the UI if the last update
@@ -249,6 +250,7 @@ static void BlockTipChanged(ClientModel *clientmodel, bool initialSync, int heig
         bool invoked = QMetaObject::invokeMethod(clientmodel, "numBlocksChanged", Qt::QueuedConnection,
                                   Q_ARG(int, height),
                                   Q_ARG(QDateTime, QDateTime::fromTime_t(blockTime)),
+                                  Q_ARG(QString, QString::fromStdString(blockHash.ToString())),
                                   Q_ARG(double, verificationProgress),
                                   Q_ARG(bool, fHeader));
         assert(invoked);
@@ -264,8 +266,8 @@ void ClientModel::subscribeToCoreSignals()
     m_handler_notify_network_active_changed = m_node.handleNotifyNetworkActiveChanged(std::bind(NotifyNetworkActiveChanged, this, std::placeholders::_1));
     m_handler_notify_alert_changed = m_node.handleNotifyAlertChanged(std::bind(NotifyAlertChanged, this));
     m_handler_banned_list_changed = m_node.handleBannedListChanged(std::bind(BannedListChanged, this));
-    m_handler_notify_block_tip = m_node.handleNotifyBlockTip(std::bind(BlockTipChanged, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, false));
-    m_handler_notify_header_tip = m_node.handleNotifyHeaderTip(std::bind(BlockTipChanged, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, true));
+    m_handler_notify_block_tip = m_node.handleNotifyBlockTip(std::bind(BlockTipChanged, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, false));
+    m_handler_notify_header_tip = m_node.handleNotifyHeaderTip(std::bind(BlockTipChanged, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, true));
 }
 
 void ClientModel::unsubscribeFromCoreSignals()

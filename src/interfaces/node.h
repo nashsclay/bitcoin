@@ -150,6 +150,9 @@ public:
     //! Get last block time.
     virtual int64_t getLastBlockTime() = 0;
 
+    //! Get last block hash.
+    virtual uint256 getLastBlockHash() = 0;
+
     //! Get verification progress.
     virtual double getVerificationProgress() = 0;
 
@@ -248,12 +251,12 @@ public:
 
     //! Register handler for block tip messages.
     using NotifyBlockTipFn =
-        std::function<void(bool initial_download, int height, int64_t block_time, double verification_progress)>;
+        std::function<void(bool initial_download, int height, int64_t block_time, uint256 block_hash, double verification_progress)>;
     virtual std::unique_ptr<Handler> handleNotifyBlockTip(NotifyBlockTipFn fn) = 0;
 
     //! Register handler for header tip messages.
     using NotifyHeaderTipFn =
-        std::function<void(bool initial_download, int height, int64_t block_time, double verification_progress)>;
+        std::function<void(bool initial_download, int height, int64_t block_time, uint256 block_hash, double verification_progress)>;
     virtual std::unique_ptr<Handler> handleNotifyHeaderTip(NotifyHeaderTipFn fn) = 0;
 
     //! Return pointer to internal chain interface, useful for testing.

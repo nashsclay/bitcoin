@@ -193,6 +193,14 @@ public:
         }
         return Params().GenesisBlock().GetBlockTime(); // Genesis block's time of current network
     }
+    uint256 getLastBlockHash() override
+    {
+        LOCK(::cs_main);
+        if (::ChainActive().Tip()) {
+            return ::ChainActive().Tip()->GetBlockHash();
+        }
+        return Params().GenesisBlock().GetHash(); // Genesis block's hash of current network
+    }
     double getVerificationProgress() override
     {
         const CBlockIndex* tip;
@@ -307,7 +315,7 @@ public:
     std::unique_ptr<Handler> handleNotifyBlockTip(NotifyBlockTipFn fn) override
     {
         return MakeHandler(::uiInterface.NotifyBlockTip_connect([fn](bool initial_download, const CBlockIndex* block) {
-            fn(initial_download, block->nHeight, block->GetBlockTime(),
+            fn(initial_download, block->nHeight, block->GetBlockTime(), block->GetBlockHash(),
                 GuessVerificationProgress(Params().TxData(), block));
         }));
     }
@@ -315,7 +323,7 @@ public:
     {
         return MakeHandler(
             ::uiInterface.NotifyHeaderTip_connect([fn](bool initial_download, const CBlockIndex* block) {
-                fn(initial_download, block->nHeight, block->GetBlockTime(),
+                fn(initial_download, block->nHeight, block->GetBlockTime(), block->GetBlockHash(),
                     /* verification progress is unused when a header was received */ 0);
             }));
     }
