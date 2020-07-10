@@ -123,9 +123,14 @@ static UniValue generateBlocks(const CTxMemPool& mempool, const CScript& coinbas
             LOCK(cs_main);
             IncrementExtraNonce(pblock, ::ChainActive().Tip(), nExtraNonce);
         }
-        while (nMaxTries > 0 && pblock->nNonce < std::numeric_limits<uint32_t>::max() && !CheckProofOfWork(pblock->GetHash(), pblock->nBits, Params().GetConsensus()) && !ShutdownRequested()) {
+        const Consensus::Params &consensusParams = Params().GetConsensus();
+        const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
+        while (nMaxTries > 0 && pblock->nNonce < std::numeric_limits<uint32_t>::max() && !CheckProofOfWork(pblock->GetPoWHash(), pblock->nBits, algo, consensusParams) && !ShutdownRequested()) {
             ++pblock->nNonce;
             --nMaxTries;
+            if ((pblock->nNonce & 0x1ffff) == 0)
+                pblock->nTime = std::max((int64_t)pblock->nTime, GetAdjustedTime());
+                //UpdateTime(pblock, consensusParams, ::ChainActive().Tip());
         }
         if (nMaxTries == 0 || ShutdownRequested()) {
             break;
@@ -133,6 +138,7 @@ static UniValue generateBlocks(const CTxMemPool& mempool, const CScript& coinbas
         if (pblock->nNonce == std::numeric_limits<uint32_t>::max()) {
             continue;
         }
+        LogPrintf("proof-of-work found\n   hash: %s\n target: %s\n   bits: %08x\n  nonce: %u\n", pblock->GetPoWHash().ToString(), arith_uint256().SetCompact(pblock->nBits).ToString(), pblock->nBits, pblock->nNonce);
         std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(*pblock);
         if (!ProcessNewBlock(Params(), shared_pblock, true, nullptr))
             throw JSONRPCError(RPC_INTERNAL_ERROR, "ProcessNewBlock, block not accepted");
@@ -214,7 +220,7 @@ static UniValue generatetoaddress(const JSONRPCRequest& request)
     int nGenerate = request.params[0].get_int();
     uint64_t nMaxTries = 1000000;
     if (!request.params[2].isNull()) {
-        nMaxTries = request.params[2].get_int();
+        nMaxTries = request.params[2].get_int64();
     }
 
     CTxDestination destination = DecodeDestination(request.params[1].get_str());
@@ -680,7 +686,7 @@ static UniValue getblocktemplate(const JSONRPCRequest& request)
             }
         }
     }
-    result.pushKV("version", pblock->nVersion);
+    result.pushKV("version", (uint64_t)pblock->nVersion);
     result.pushKV("rules", aRules);
     result.pushKV("vbavailable", vbavailable);
     result.pushKV("vbrequired", int(0));
