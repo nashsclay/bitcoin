@@ -399,14 +399,14 @@ static inline bool GetKernelStakeModifierV03(const CBlockIndex* pindexPrev, uint
     return true;
 }
 
-uint256 stakeHash(const unsigned int& nTimeTx, CDataStream& ss, const unsigned int& prevoutIndex, const uint256& prevoutHash, const unsigned int& nTimeBlockFrom, bool fNewOrder)
+uint256 stakeHash(const unsigned int& nTimeTx, CDataStream& ss, const unsigned int& prevoutIndex, const uint256& prevoutHash, const unsigned int& nTimeBlockFrom, bool fNewOrder, bool fNewHash)
 {
     // Using the transaction hash and the index number ensure each hash is unique
     if (fNewOrder)
-        ss << nTimeBlockFrom << prevoutIndex << prevoutHash << nTimeTx;
-    else
         ss << nTimeBlockFrom << prevoutHash << prevoutIndex << nTimeTx;
-    return Hash(ss.begin(), ss.end());
+    else
+        ss << nTimeBlockFrom << prevoutIndex << prevoutHash << nTimeTx;
+    return fNewHash ? HashQuark((const char*)ss.data(), (const char*)ss.data() + ss.size()) : Hash((const char*)ss.data(), (const char*)ss.data() + ss.size());
 }
 
 // Test hash vs target
@@ -423,7 +423,7 @@ static inline bool stakeTargetHit(const uint256& hashProofOfStake, const CAmount
 bool GetKernelStakeModifier(const CBlockIndex* pindexPrev, const uint256& hashBlockFrom, unsigned int nTimeTx, const Consensus::Params& params, uint64_t& nStakeModifier, uint256& nStakeModifierV2, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake)
 {
     // Peercoin stake modifier selection for kernel
-    if (pindexPrev->nHeight + 1 >= params.nMandatoryUpgradeBlock[1]) //IsProtocolV05(nTimeTx)
+    if ((unsigned)(pindexPrev->nHeight+1) >= (params.nMandatoryUpgradeBlock[1]+params.nMinerConfirmationWindow)) //IsProtocolV05(nTimeTx)
         return GetKernelStakeModifierV05(pindexPrev, nTimeTx, params, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake);
     else if (Params().NetworkIDString() != CBaseChainParams::REGTEST) {
         if (pindexPrev->UsesStakeModifierV2())
@@ -519,10 +519,12 @@ bool CheckStakeKernelHash(const unsigned int& nBits, const CBlockIndex* pindexPr
 
     // If wallet is simply checking to make sure a hash is valid
     if (fCheck) {
-        if (nHeightCurrent >= params.nMandatoryUpgradeBlock[0])
-            hashProofOfStake = stakeHash(nTimeTx, ss, prevout.n, prevout.hash, nTimeBlockFrom, true);
+        if (nHeightCurrent >= params.nMandatoryUpgradeBlock[1])
+            hashProofOfStake = stakeHash(nTimeTx, ss, prevout.n, prevout.hash, nTimeBlockFrom, true, true);
+        else if (nHeightCurrent >= params.nMandatoryUpgradeBlock[0])
+            hashProofOfStake = stakeHash(nTimeTx, ss, prevout.n, prevout.hash, nTimeBlockFrom, false, false);
         else
-            hashProofOfStake = stakeHash(nTimeTx, ss, prevout.n, prevout.hash, nTimeTxPrev, false);
+            hashProofOfStake = stakeHash(nTimeTx, ss, prevout.n, prevout.hash, nTimeTxPrev, true, false);
         if (gArgs.GetBoolArg("-debug", false) || fPrintProofOfStake) {
             //LogPrintf("CheckStakeKernelHash() : nStakeModifierV2=%s\n", nStakeModifierV2.ToString());
             //if (IsProtocolV03(nTimeTx))
@@ -556,7 +558,7 @@ bool CheckStakeKernelHash(const unsigned int& nBits, const CBlockIndex* pindexPr
 
         // Hash this iteration - start at nHashDrift and work backwards to nTimeTx
         nTryTime = nTimeTx + i; //nTimeTx + nHashDrift - i;
-        hashProofOfStake = stakeHash(nTryTime, ss, prevout.n, prevout.hash, nTimeBlockFrom, true);
+        hashProofOfStake = stakeHash(nTryTime, ss, prevout.n, prevout.hash, nTimeBlockFrom, true, true);
 
         // If stake hash does not meet the target then continue to next iteration
         if (!stakeTargetHit(hashProofOfStake, nValueIn, bnTargetPerCoinDay, nHeightCurrent >= params.nMandatoryUpgradeBlock[1]))

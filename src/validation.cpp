@@ -1995,14 +1995,14 @@ bool ContextualCheckPoSBlock(const CBlock& block, const bool& fProofOfStake, Blo
     bool fGeneratedStakeModifier = false;
     //if (!ComputeNextStakeModifier(pindex, nStakeModifier, fGeneratedStakeModifier))
         //return error("ConnectBlock(): ComputeNextStakeModifier() failed");
-    if (pindex->nHeight < params.nMandatoryUpgradeBlock[0]) {
-        nStakeModifierV2 = ComputeStakeModifierV2(pindex->pprev, fProofOfStake ? block.vtx[1]->vin[0].prevout.hash : pindex->GetBlockHash());
+    if (pindex->nHeight >= params.nMandatoryUpgradeBlock[1]) {
+        nStakeModifier = ComputeStakeModifierV3(pindex->pprev, pindex->GetBlockHash());
         fGeneratedStakeModifier = true;
-    } else if (pindex->nHeight < params.nMandatoryUpgradeBlock[1]) {
+    } else if (pindex->nHeight >= params.nMandatoryUpgradeBlock[0]) {
         nStakeModifierV2 = ComputeStakeModifierV2(pindex->pprev, pindex->GetBlockHash());
         fGeneratedStakeModifier = true;
     } else {
-        nStakeModifier = ComputeStakeModifierV3(pindex->pprev, pindex->GetBlockHash());
+        nStakeModifierV2 = ComputeStakeModifierV2(pindex->pprev, fProofOfStake ? block.vtx[1]->vin[0].prevout.hash : pindex->GetBlockHash());
         fGeneratedStakeModifier = true;
     }
 
@@ -2041,10 +2041,10 @@ bool ContextualCheckPoSBlock(const CBlock& block, const bool& fProofOfStake, Blo
     }*/
     if (!pindex->SetStakeEntropyBit(nEntropyBit))
         return error("ConnectBlock(): SetStakeEntropyBit() failed");
-    if (pindex->nHeight < params.nMandatoryUpgradeBlock[1])
-        pindex->SetStakeModifierV2(nStakeModifierV2, fGeneratedStakeModifier);
-    else
+    if (pindex->nHeight >= params.nMandatoryUpgradeBlock[1])
         pindex->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
+    else
+        pindex->SetStakeModifierV2(nStakeModifierV2, fGeneratedStakeModifier);
     //pindex->nStakeModifierChecksum = nStakeModifierChecksum;
     setDirtyBlockIndex.insert(pindex);  // queue a write to disk
 

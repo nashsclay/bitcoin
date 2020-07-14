@@ -205,7 +205,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* tip, const CBlockIn
                         ss << nStakeModifierV2;
                     else
                         ss << nStakeModifier;
-                    hashProofOfStake = stakeHash(blockindex->GetBlockTime(), ss, prevout.n, prevout.hash, nTimeBlockFrom, blockindex->nHeight >= params.nMandatoryUpgradeBlock[0]);
+                    hashProofOfStake = stakeHash(blockindex->GetBlockTime(), ss, prevout.n, prevout.hash, nTimeBlockFrom, blockindex->nHeight >= params.nMandatoryUpgradeBlock[1] || blockindex->nHeight < params.nMandatoryUpgradeBlock[0], blockindex->nHeight >= params.nMandatoryUpgradeBlock[1]);
 
                     UniValue stakeData(UniValue::VOBJ);
                     stakeData.pushKV("proofhash", hashProofOfStake.GetHex());

@@ -28,7 +28,7 @@ uint64_t ComputeStakeModifierV3(const CBlockIndex* pindexPrev, const uint256& ke
 
 // Check whether stake kernel meets hash target
 // Sets hashProofOfStake on success return
-uint256 stakeHash(const unsigned int& nTimeTx, CDataStream& ss, const unsigned int& prevoutIndex, const uint256& prevoutHash, const unsigned int& nTimeBlockFrom, bool fNewOrder);
+uint256 stakeHash(const unsigned int& nTimeTx, CDataStream& ss, const unsigned int& prevoutIndex, const uint256& prevoutHash, const unsigned int& nTimeBlockFrom, bool fNewOrder, bool fNewHash);
 bool GetKernelStakeModifier(const CBlockIndex* pindexPrev, const uint256& hashBlockFrom, unsigned int nTimeTx, const Consensus::Params& params, uint64_t& nStakeModifier, uint256& nStakeModifierV2, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake);
 bool CheckStakeKernelHash(const unsigned int& nBits, const CBlockIndex* pindexPrev, const CBlockIndex* pindexFrom, const CTxOut& prevTxOut, const unsigned int& nTimeTxPrev, const COutPoint& prevout, unsigned int& nTimeTx, unsigned int nHashDrift, bool fCheck, uint256& hashProofOfStake, bool fPrintProofOfStake = false);
 
