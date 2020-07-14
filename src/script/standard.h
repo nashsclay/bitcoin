@@ -34,6 +34,12 @@ public:
 static const unsigned int MAX_OP_RETURN_RELAY = 644;
 
 /**
+ * This is the maximum number of bytes which can be carried by TX_MULTISIG_DATA.
+ * See https://github.com/bitcoin/bitcoin/pull/1809 for more information.
+ */
+static const unsigned int MAX_MULTISIG_DATA_OP_DROP_SIZE = 80;
+
+/**
  * A data carrying output is an unspendable output containing data. The script
  * type is designated as TX_NULL_DATA.
  */
@@ -66,6 +72,7 @@ enum txnouttype
     TX_PUBKEYHASH,
     TX_SCRIPTHASH,
     TX_MULTISIG,
+    TX_MULTISIG_DATA,
     TX_NULL_DATA, //!< unspendable OP_RETURN script that carries data
     TX_WITNESS_V0_SCRIPTHASH,
     TX_WITNESS_V0_KEYHASH,
