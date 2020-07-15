@@ -139,10 +139,10 @@ public:
         consensus.mTreasuryPayees.emplace(CScript() << OP_HASH160 << ParseHex("8369e8934167c47127ce0327964309a0b13a52cc") << OP_EQUAL, 50); // 5% for QwvSVBtpEWYcJohvLjaNgF2uKh4twzFNMy (community fund multisig)
 
         // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000000000000000000000");
+        consensus.nMinimumChainWork = uint256S("0x000000000000000000000000000000000000000000000ccf70b3380f02359664");
 
         // By default assume that the signatures in ancestors of this block are valid.
-        consensus.defaultAssumeValid = uint256S("0x0000000000000000000000000000000000000000000000000000000000000000"); // 1110000
+        consensus.defaultAssumeValid = uint256S("0x0000000000000000000000000000000000000000000000000000000000000000"); // 1150000
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -170,6 +170,9 @@ public:
         // This is fine at runtime as we'll fall back to using them as a oneshot if they don't support the
         // service bits we want, but we should get them updated to support all service bits wanted by any
         // release ASAP to avoid it where possible.
+        vSeeds.emplace_back("seed1.simplicity-coin.com");
+        vSeeds.emplace_back("seed2.simplicity-coin.com");
+        vSeeds.emplace_back("seed3.simplicity-coin.com");
         vSeeds.emplace_back("zentec.ddns.net");
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,18);
@@ -212,15 +215,15 @@ public:
                 {1000000, uint256S("0xda2636057aa54f047fddb79a6d71617ac075c59c26c84761585735b4e5978f3c")},
                 {1050000, uint256S("0x9ab97fa25881e95b4c22fb7515d90738054a43231231acf8d5fc3be581591192")},
                 {1100000, uint256S("0x8aecf2e9d02460c3a97d83a178bf6f9f81684e2df1f95d8cd9dea1ae780b814e")},
-                {1110000, uint256S("0x442f3ff725f9128bb432cac6e4c312c31548a646bacb933ff80fc214aea09eff")},
+                {1150000, uint256S("0x6dc38dca5b5478fb7dc61bf2421b0c5b96b8759aaf785152c9b5fafb0d98d907")},
             }
         };
 
         chainTxData = ChainTxData{
-            // Data from RPC: getchaintxstats 4096 0000000000000000000f2adce67e49b0b6bdeb9de8b7c3d7e93b21e7fc1e819d
-            /* nTime    */ 1582906496,
-            /* nTxCount */ 1845905,
-            /* dTxRate  */ 3.305709665792344,
+            // Data from RPC: getchaintxstats 30720 6dc38dca5b5478fb7dc61bf2421b0c5b96b8759aaf785152c9b5fafb0d98d907
+            /* nTime    */ 1588409707,
+            /* nTxCount */ 1918140,
+            /* dTxRate  */ 0.0127127528800813,
         };
     }
 };
