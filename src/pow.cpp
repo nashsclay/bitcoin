@@ -105,8 +105,8 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CB
         nInterval = nTargetTimespan / nTargetSpacing;
 
         // Difficulty was reset to before the scrypt difficulty bug started when the patch was deployed, so we need to account for the first two blocks on the new difficulty here
-        if (nHeight == 1035619 && pblock->nTime == 1574157019 && algo == CBlockHeader::ALGO_POW_SCRYPT_SQUARED) return 0x1f099ab7;
-        if (nHeight == 1035629 && pblock->nTime == 1574158315 && algo == CBlockHeader::ALGO_POW_SCRYPT_SQUARED) return 0x1f0382e8;
+        if (nHeight == 1035619 && pblock->nTime == 1574157019 && algo == CBlockHeader::ALGO_POW_SCRYPT_SQUARED && pindexPrev->GetBlockHash() == uint256S("0x676df2e0427b68622343a0f1fb4e683dfc587ed6d49e5566dcca2dcbb179f5d2")) return 0x1f099ab7;
+        if (nHeight == 1035629 && pblock->nTime == 1574158315 && algo == CBlockHeader::ALGO_POW_SCRYPT_SQUARED && pindexPrev->GetBlockHash() == uint256S("0x1787ac2c2d10543cdea74c15f1cbbdd95988eeea420cf55c5f50890c208f4f14")) return 0x1f0382e8;
 
         if (!fProofOfStake)
             nTargetSpacing *= 4; // 4 * nTargetSpacing was used to get a 320 second target on both PoW algos, but nInterval wasn't adjusted accordingly, so the effective interval was actually 4 * nInterval
