@@ -254,6 +254,78 @@ unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlo
     return bnNew.GetCompact();
 }
 
+unsigned int WeightedMovingAverageTarget(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
+{
+    const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
+    const bool fProofOfStake = pblock->IsProofOfStake();
+    const arith_uint256 bnPowLimit = algo == -1 ? UintToArith256(params.powLimit[fProofOfStake ? CBlockHeader::ALGO_POS : CBlockHeader::ALGO_POW_QUARK]) : UintToArith256(params.powLimit[algo]);
+    const unsigned int nProofOfWorkLimit = bnPowLimit.GetCompact();
+    uint32_t nTargetSpacing = params.nPowTargetSpacing;
+    nTargetSpacing *= 2; // 160 second block time for PoW + 160 second block time for PoS = 80 second effective block time
+    if (!fProofOfStake)
+        nTargetSpacing *= (CBlockHeader::ALGO_COUNT - 1); // Multiply by the number of PoW algos
+
+    const uint32_t X_CUBED_MULTI = 0; // Cubically increasing weight for more recent solvetimes
+    const uint32_t X_SQUARED_MULTI = 0; // Quadratically increasing weight for more recent solvetimes
+    const uint32_t X_MULTI = 1; // Linearly increasing weight for more recent solvetimes
+    int nPastBlocks = params.nPowTargetTimespan / nTargetSpacing;
+    if (pindexLast == nullptr)
+        return nProofOfWorkLimit; // genesis block
+
+    const CBlockIndex *pindexPrev = algo == -1 ? GetLastBlockIndex(pindexLast, fProofOfStake) : GetLastBlockIndexForAlgo(pindexLast, algo);
+    if (pindexPrev->pprev == nullptr)
+        return nProofOfWorkLimit; // first block
+
+    //nPastBlocks = std::min(nPastBlocks, pindexLast->nHeight);
+    if (pindexLast->nHeight < nPastBlocks + 2) // We are adding 2 here to skip the first two blocks at nProofOfWorkLimit, but it isn't necessary to do this for the average to work
+        return CalculateNextTargetRequired(pindexLast, pblock, params);
+
+    const CBlockIndex *pindex = pindexPrev;
+    arith_uint256 bnPastTargetAvg;
+    int64_t nSumSolvetimesWeighted = 0;
+    uint32_t nElementsAveraged = 0;
+
+    for (int nCountBlocks = nPastBlocks; nCountBlocks >= 1; nCountBlocks--) {
+        const CBlockIndex* pprev = algo == -1 ? GetLastBlockIndex(pindex->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindex->pprev, algo);
+        if (pindex->nBits != nProofOfWorkLimit) { // Don't add min difficulty targets to the average
+            arith_uint256 bnTarget = arith_uint256().SetCompact(pindex->nBits);
+            bnPastTargetAvg += bnTarget / nPastBlocks;
+
+            if (pprev && pprev->nHeight != 0) {
+                const uint32_t nWeightMultiplier = (X_CUBED_MULTI * nCountBlocks*nCountBlocks*nCountBlocks) + (X_SQUARED_MULTI * nCountBlocks*nCountBlocks) + (X_MULTI * nCountBlocks);
+                nSumSolvetimesWeighted += (pindex->GetBlockTime() - pprev->GetBlockTime()) * nWeightMultiplier;
+                nElementsAveraged += nWeightMultiplier;
+            }
+        } else
+            nCountBlocks++; // Average one more block to make up for the one we skipped
+
+        if (pprev && pprev->nHeight != 0)
+            pindex = pprev;
+        else
+            break;
+    }
+
+    if (bnPastTargetAvg == arith_uint256())
+        bnPastTargetAvg = bnPowLimit;
+    arith_uint256 bnNew(bnPastTargetAvg);
+
+    int nActualTimespanWeighted = nSumSolvetimesWeighted;
+    const int nTargetTimespan = nPastBlocks * nTargetSpacing * nElementsAveraged;
+
+    // We have no choice but to limit the timespan here in case the calculation resulted in zero or a negative number, but it shouldn't be possible to reach this while requiring sequential timestamps or MTP enforcement
+    if (nActualTimespanWeighted < 1)
+        nActualTimespanWeighted = 1;
+
+    // Keep in mind the order of operations and integer division here - this is why the *= operator cannot be used, as it could cause overflow or integer division to occur
+    arith_uint512 bnNew512 = arith_uint512(bnNew) * nActualTimespanWeighted / nTargetTimespan; // next_target = avg(nPastBlocks prev_targets) * lwma(nPastBlocks prev_solvetimes) / target_solvetime
+    bnNew = bnNew512.trim256();
+
+    if (bnNew > bnPowLimit)
+        bnNew = bnPowLimit;
+
+    return bnNew.GetCompact();
+}
+
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, int algo, const Consensus::Params& params)
 {
     bool fNegative;
