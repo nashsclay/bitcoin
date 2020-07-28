@@ -170,6 +170,50 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CB
     return bnNew.GetCompact();
 }
 
+unsigned int WeightedTargetExponentialMovingAverage(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
+{
+    const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
+    const bool fProofOfStake = pblock->IsProofOfStake();
+    const arith_uint256 bnPowLimit = algo == -1 ? UintToArith256(params.powLimit[fProofOfStake ? CBlockHeader::ALGO_POS : CBlockHeader::ALGO_POW_QUARK]) : UintToArith256(params.powLimit[algo]);
+    const unsigned int nProofOfWorkLimit = bnPowLimit.GetCompact();
+    if (pindexLast == nullptr)
+        return nProofOfWorkLimit; // genesis block
+
+    const CBlockIndex* pindexPrev = algo == -1 ? GetLastBlockIndex(pindexLast, fProofOfStake) : GetLastBlockIndexForAlgo(pindexLast, algo);
+    if (pindexPrev->pprev == nullptr)
+        return nProofOfWorkLimit; // first block
+    const CBlockIndex* pindexPrevPrev = algo == -1 ? GetLastBlockIndex(pindexPrev->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindexPrev->pprev, algo);
+    if (pindexPrevPrev->pprev == nullptr)
+        return nProofOfWorkLimit; // second block
+
+    int nActualSpacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime(); // Difficulty for PoW and PoS are calculated separately
+
+    arith_uint256 bnNew;
+    bnNew.SetCompact(pindexPrev->nBits);
+    int nTargetSpacing = params.nPowTargetSpacing;
+    const uint32_t nTargetTimespan = params.nPowTargetTimespan;
+    nTargetSpacing *= 2; // 160 second block time for PoW + 160 second block time for PoS = 80 second effective block time
+    if (!fProofOfStake)
+        nTargetSpacing *= (CBlockHeader::ALGO_COUNT - 1); // Multiply by the number of PoW algos
+    const int nInterval = nTargetTimespan / nTargetSpacing; // alpha_reciprocal = (N(SMA) + 1) / 2 for same "center of mass" as SMA
+
+    // nActualSpacing must be restricted as to not produce a negative number below
+    if (nActualSpacing <= -((nInterval - 1) * nTargetSpacing))
+        nActualSpacing = -((nInterval - 1) * nTargetSpacing) + 1;
+
+    const uint32_t numerator = (nInterval - 1) * nTargetSpacing + nActualSpacing;
+    const uint32_t denominator = nInterval * nTargetSpacing;
+
+    // Keep in mind the order of operations and integer division here - this is why the *= operator cannot be used, as it could cause overflow or integer division to occur
+    arith_uint512 bnNew512 = arith_uint512(bnNew) * numerator / denominator; // For WTEMA: next_target = prev_target * (nInterval - 1 + prev_solvetime/target_solvetime) / nInterval
+    bnNew = bnNew512.trim256();
+
+    if (bnNew > bnPowLimit)
+        bnNew = bnPowLimit;
+
+    return bnNew.GetCompact();
+}
+
 unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
 {
     const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
