@@ -13,14 +13,14 @@
 #include <uint256.h>
 
 // peercoin: find last block index up to pindex
-const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake)
+static inline const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake)
 {
     while (pindex && pindex->pprev && pindex->IsProofOfStake() != fProofOfStake)
         pindex = pindex->pprev;
     return pindex;
 }
 
-const CBlockIndex* GetLastBlockIndexForAlgo(const CBlockIndex* pindex, int algo)
+static inline const CBlockIndex* GetLastBlockIndexForAlgo(const CBlockIndex* pindex, int algo)
 {
     while (pindex && pindex->pprev && CBlockHeader::GetAlgo(pindex->nVersion) != algo)
         pindex = pindex->pprev;
@@ -40,16 +40,16 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
         // then allow mining of a min-difficulty block.
         const CBlockIndex* pindexPrev = GetLastBlockIndexForAlgo(pindexLast, algo);
         if (pindexPrev->nHeight > 10 && pblock->GetBlockTime() > pindexPrev->GetBlockTime() + (30*60))
-            return nProofOfWorkLimit;
-        if (pindexPrev->pprev && pindexPrev->nBits == nProofOfWorkLimit) {
+            return (nProofOfWorkLimit - 1);
+        if (pindexPrev->pprev && pindexPrev->nBits == (nProofOfWorkLimit - 1)) {
             // Return the block before the last non-special-min-difficulty-rules-block
             const CBlockIndex* pindex = pindexPrev;
-            while (pindex->pprev && (pindex->nBits == nProofOfWorkLimit || CBlockHeader::GetAlgo(pindex->nVersion) != algo))
+            while (pindex->pprev && (pindex->nBits == (nProofOfWorkLimit - 1) || CBlockHeader::GetAlgo(pindex->nVersion) != algo))
                 pindex = pindex->pprev;
             const CBlockIndex* pprev = GetLastBlockIndexForAlgo(pindex->pprev, algo);
             if (pprev && pprev->nHeight > 10) {
                 // Don't return pprev->nBits if it is another min-difficulty block; instead return pindex->nBits
-                if (pprev->nBits != nProofOfWorkLimit)
+                if (pprev->nBits != (nProofOfWorkLimit - 1))
                     return pprev->nBits;
                 else
                     return pindex->nBits;
@@ -164,7 +164,7 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CB
     else
         bnNew = bnNew512.trim256();
 
-    if (bnNew > bnPowLimit)
+    if (bnNew > bnPowLimit || bnNew == arith_uint256())
         bnNew = bnPowLimit;
 
     return nHeight < params.nMandatoryUpgradeBlock[1] ? bnNew.GetCompact() : bnNew.GetCompactRounded();
@@ -208,7 +208,7 @@ unsigned int WeightedTargetExponentialMovingAverage(const CBlockIndex* pindexLas
     arith_uint512 bnNew512 = arith_uint512(bnNew) * numerator / denominator; // For WTEMA: next_target = prev_target * (nInterval - 1 + prev_solvetime/target_solvetime) / nInterval
     bnNew = bnNew512.trim256();
 
-    if (bnNew > bnPowLimit)
+    if (bnNew512 > arith_uint512(bnPowLimit) || bnNew == arith_uint256())
         bnNew = bnPowLimit;
 
     return bnNew.GetCompactRounded();
@@ -250,7 +250,7 @@ unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlo
     // This is a simple moving average of difficulty targets with double weight for the most recent target by default (same as a harmonic SMA of difficulties)
     // (2 * T1 + T2 + T3 + T4 + ... + T24) / (24 + 1)
     for (int nCountBlocks = 1; nCountBlocks <= nPastBlocks; nCountBlocks++) {
-        if (pindex->nBits != nProofOfWorkLimit || !params.fPowAllowMinDifficultyBlocks) { // Don't add min difficulty targets to the average
+        if (pindex->nBits != (nProofOfWorkLimit - 1) || !params.fPowAllowMinDifficultyBlocks) { // Don't add min difficulty targets to the average
             arith_uint256 bnTarget = arith_uint256().SetCompact(pindex->nBits);
             if (nCountBlocks == 1)
                 bnTarget *= nFirstWeightMultiplier;
@@ -273,8 +273,8 @@ unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlo
     // If pprev was nullptr, nActualTimespan will use one less than nPastBlocks timestamps, which causes difficulty to be slightly higher than expected
     int nActualTimespan = pindexPrev->GetBlockTime() - pindex->GetBlockTime(); // Dark Gravity Wave
     int nTargetTimespan = nPastBlocks * nTargetSpacing;
-    // Respond faster by avoiding tempering when nActualTimespan is very small (careful - this makes the difficulty response asymmetric)
-    if (nActualTimespan <= nTargetTimespan / 2)
+    // Respond faster by avoiding tempering when nActualTimespan is very small or very large
+    if (nActualTimespan <= nTargetTimespan / 2 || nActualTimespan >= nTargetTimespan * 2)
         fUseTempering = false;
 
     // Note we did not use MTP to calculate nActualTimespan here, which enables the time warp attack to drop the difficulty to zero using timestamps in the past due to the timespan limit below
@@ -291,7 +291,7 @@ unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlo
     arith_uint512 bnNew512 = arith_uint512(bnNew) * nActualTimespan / nTargetTimespan; // next_target = avg(nPastBlocks prev_targets) * (nTemperingFactor - 1 + avg(nPastBlocks prev_solvetimes)/target_solvetime) / nTemperingFactor
     bnNew = bnNew512.trim256();
 
-    if (bnNew > bnPowLimit)
+    if (bnNew512 > arith_uint512(bnPowLimit) || bnNew == arith_uint256())
         bnNew = bnPowLimit;
 
     return bnNew.GetCompactRounded();
@@ -328,15 +328,17 @@ unsigned int WeightedMovingAverageTarget(const CBlockIndex* pindexLast, const CB
     int64_t nSumSolvetimesWeighted = 0;
     uint32_t nElementsAveraged = 0;
 
+    // This is a linearly weighted moving average of solvetimes
+    // (1 * ST1 + 2 * ST2 + 3 * ST3 + 4 * ST4 + ... + 24 * ST24) / (1 + 2 + 3 + 4 + ... + 24)
     for (int nCountBlocks = nPastBlocks; nCountBlocks >= 1; nCountBlocks--) {
         const CBlockIndex* pprev = algo == -1 ? GetLastBlockIndex(pindex->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindex->pprev, algo);
-        if (pindex->nBits != nProofOfWorkLimit || !params.fPowAllowMinDifficultyBlocks) { // Don't add min difficulty targets to the average
+        if (pindex->nBits != (nProofOfWorkLimit - 1) || !params.fPowAllowMinDifficultyBlocks) { // Don't add min difficulty targets to the average
             arith_uint256 bnTarget = arith_uint256().SetCompact(pindex->nBits);
             bnPastTargetAvg += bnTarget / nPastBlocks;
 
             if (pprev && pprev->nHeight != 0) {
                 const uint32_t nWeightMultiplier = (X_CUBED_MULTI * nCountBlocks*nCountBlocks*nCountBlocks) + (X_SQUARED_MULTI * nCountBlocks*nCountBlocks) + (X_MULTI * nCountBlocks);
-                nSumSolvetimesWeighted += (pindex->GetBlockTime() - pprev->GetBlockTime()) * nWeightMultiplier;
+                nSumSolvetimesWeighted += (pindex->GetBlockTime() - pprev->GetBlockTime()) * nWeightMultiplier; // nWeightMultiplier == nCountBlocks
                 nElementsAveraged += nWeightMultiplier;
             }
         } else
@@ -352,18 +354,18 @@ unsigned int WeightedMovingAverageTarget(const CBlockIndex* pindexLast, const CB
         bnPastTargetAvg = bnPowLimit;
     arith_uint256 bnNew(bnPastTargetAvg);
 
-    int nActualTimespanWeighted = nSumSolvetimesWeighted;
-    const int nTargetTimespan = nPastBlocks * nTargetSpacing * nElementsAveraged;
-
     // We have no choice but to limit the timespan here in case the calculation resulted in zero or a negative number, but it shouldn't be possible to reach this while requiring sequential timestamps or MTP enforcement
-    if (nActualTimespanWeighted < 1)
-        nActualTimespanWeighted = 1;
+    if (nSumSolvetimesWeighted < 1)
+        nSumSolvetimesWeighted = 1;
+
+    const uint32_t nActualTimespanWeighted = nSumSolvetimesWeighted;
+    const uint32_t nTargetTimespan = nPastBlocks * nTargetSpacing * nElementsAveraged;
 
     // Keep in mind the order of operations and integer division here - this is why the *= operator cannot be used, as it could cause overflow or integer division to occur
     arith_uint512 bnNew512 = arith_uint512(bnNew) * nActualTimespanWeighted / nTargetTimespan; // next_target = avg(nPastBlocks prev_targets) * lwma(nPastBlocks prev_solvetimes) / target_solvetime
     bnNew = bnNew512.trim256();
 
-    if (bnNew > bnPowLimit)
+    if (bnNew512 > arith_uint512(bnPowLimit) || bnNew == arith_uint256())
         bnNew = bnPowLimit;
 
     return bnNew.GetCompactRounded();
