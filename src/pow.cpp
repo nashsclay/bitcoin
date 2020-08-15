@@ -13,14 +13,14 @@
 #include <uint256.h>
 
 // peercoin: find last block index up to pindex
-static inline const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake)
+static inline const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, const bool fProofOfStake)
 {
     while (pindex && pindex->pprev && pindex->IsProofOfStake() != fProofOfStake)
         pindex = pindex->pprev;
     return pindex;
 }
 
-static inline const CBlockIndex* GetLastBlockIndexForAlgo(const CBlockIndex* pindex, int algo)
+static inline const CBlockIndex* GetLastBlockIndexForAlgo(const CBlockIndex* pindex, const int& algo)
 {
     while (pindex && pindex->pprev && CBlockHeader::GetAlgo(pindex->nVersion) != algo)
         pindex = pindex->pprev;
@@ -30,7 +30,7 @@ static inline const CBlockIndex* GetLastBlockIndexForAlgo(const CBlockIndex* pin
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
 {
     const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
-    const unsigned int nProofOfWorkLimit = UintToArith256(params.powLimit[algo == -1 ? CBlockHeader::ALGO_POW_QUARK : algo]).GetCompact();
+    const uint32_t nProofOfWorkLimit = UintToArith256(params.powLimit[algo == -1 ? CBlockHeader::ALGO_POW_QUARK : algo]).GetCompact();
     if (pindexLast == nullptr || params.fPowNoRetargeting)
         return nProofOfWorkLimit;
 
@@ -68,13 +68,14 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CB
     const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
     const bool fProofOfStake = pblock->IsProofOfStake();
     const arith_uint256 bnPowLimit = algo == -1 ? UintToArith256(params.powLimit[fProofOfStake ? CBlockHeader::ALGO_POS : CBlockHeader::ALGO_POW_QUARK]) : UintToArith256(params.powLimit[algo]);
-    const unsigned int nProofOfWorkLimit = bnPowLimit.GetCompact();
+    const uint32_t nProofOfWorkLimit = bnPowLimit.GetCompact();
     if (pindexLast == nullptr)
         return nProofOfWorkLimit; // genesis block
 
     const CBlockIndex* pindexPrev = algo == -1 ? GetLastBlockIndex(pindexLast, fProofOfStake) : GetLastBlockIndexForAlgo(pindexLast, algo);
     if (pindexPrev->pprev == nullptr)
         return nProofOfWorkLimit; // first block
+
     const CBlockIndex* pindexPrevPrev = algo == -1 ? GetLastBlockIndex(pindexPrev->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindexPrev->pprev, algo);
     if (pindexPrevPrev->pprev == nullptr)
         return nProofOfWorkLimit; // second block
@@ -90,7 +91,7 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CB
     int nInterval = params.DifficultyAdjustmentInterval(); // alpha_reciprocal = (N(SMA) + 1) / 2 for same "center of mass" as SMA
 
     // Previous blunders with difficulty calculations follow...
-    int nHeight = pindexLast->nHeight + 1;
+    const int nHeight = pindexLast->nHeight + 1;
     if (nHeight < params.nMandatoryUpgradeBlock[0]) {
         nTargetSpacing = 80; // The effective block time in the original Crave fork wallet was actually 40 seconds...
         nTargetTimespan = 20 * 60;
@@ -164,7 +165,7 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CB
     else
         bnNew = bnNew512.trim256();
 
-    if (bnNew > bnPowLimit || bnNew == arith_uint256())
+    if (bnNew > bnPowLimit || bnNew512 > arith_uint512(bnPowLimit) || bnNew == arith_uint256())
         bnNew = bnPowLimit;
 
     return nHeight < params.nMandatoryUpgradeBlock[1] ? bnNew.GetCompact() : bnNew.GetCompactRounded();
@@ -175,13 +176,14 @@ unsigned int WeightedTargetExponentialMovingAverage(const CBlockIndex* pindexLas
     const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
     const bool fProofOfStake = pblock->IsProofOfStake();
     const arith_uint256 bnPowLimit = algo == -1 ? UintToArith256(params.powLimit[fProofOfStake ? CBlockHeader::ALGO_POS : CBlockHeader::ALGO_POW_QUARK]) : UintToArith256(params.powLimit[algo]);
-    const unsigned int nProofOfWorkLimit = bnPowLimit.GetCompact();
+    const uint32_t nProofOfWorkLimit = bnPowLimit.GetCompact();
     if (pindexLast == nullptr)
         return nProofOfWorkLimit; // genesis block
 
     const CBlockIndex* pindexPrev = algo == -1 ? GetLastBlockIndex(pindexLast, fProofOfStake) : GetLastBlockIndexForAlgo(pindexLast, algo);
     if (pindexPrev->pprev == nullptr)
         return nProofOfWorkLimit; // first block
+
     const CBlockIndex* pindexPrevPrev = algo == -1 ? GetLastBlockIndex(pindexPrev->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindexPrev->pprev, algo);
     if (pindexPrevPrev->pprev == nullptr)
         return nProofOfWorkLimit; // second block
@@ -195,7 +197,7 @@ unsigned int WeightedTargetExponentialMovingAverage(const CBlockIndex* pindexLas
     nTargetSpacing *= 2; // 160 second block time for PoW + 160 second block time for PoS = 80 second effective block time
     if (!fProofOfStake)
         nTargetSpacing *= (CBlockHeader::ALGO_COUNT - 1); // Multiply by the number of PoW algos
-    const int nInterval = nTargetTimespan / nTargetSpacing; // alpha_reciprocal = (N(SMA) + 1) / 2 for same "center of mass" as SMA
+    const int nInterval = nTargetTimespan / (nTargetSpacing * 2); // alpha_reciprocal = (N(SMA) + 1) / 2 for same "center of mass" as SMA
 
     // nActualSpacing must be restricted as to not produce a negative number below
     if (nActualSpacing <= -((nInterval - 1) * nTargetSpacing))
@@ -219,7 +221,7 @@ unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlo
     const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
     const bool fProofOfStake = pblock->IsProofOfStake();
     const arith_uint256 bnPowLimit = algo == -1 ? UintToArith256(params.powLimit[fProofOfStake ? CBlockHeader::ALGO_POS : CBlockHeader::ALGO_POW_QUARK]) : UintToArith256(params.powLimit[algo]);
-    const unsigned int nProofOfWorkLimit = bnPowLimit.GetCompact();
+    const uint32_t nProofOfWorkLimit = bnPowLimit.GetCompact();
     uint32_t nTargetSpacing = params.nPowTargetSpacing;
     nTargetSpacing *= 2; // 160 second block time for PoW + 160 second block time for PoS = 80 second effective block time
     if (!fProofOfStake)
@@ -236,15 +238,19 @@ unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlo
     if (pindexLast == nullptr)
         return nProofOfWorkLimit; // genesis block
 
-    const CBlockIndex *pindexPrev = algo == -1 ? GetLastBlockIndex(pindexLast, fProofOfStake) : GetLastBlockIndexForAlgo(pindexLast, algo);
+    const CBlockIndex* pindexPrev = algo == -1 ? GetLastBlockIndex(pindexLast, fProofOfStake) : GetLastBlockIndexForAlgo(pindexLast, algo);
     if (pindexPrev->pprev == nullptr)
         return nProofOfWorkLimit; // first block
+
+    const CBlockIndex* pindexPrevPrev = algo == -1 ? GetLastBlockIndex(pindexPrev->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindexPrev->pprev, algo);
+    if (pindexPrevPrev->pprev == nullptr)
+        return nProofOfWorkLimit; // second block
 
     //nPastBlocks = std::min(nPastBlocks, pindexLast->nHeight);
     if (pindexLast->nHeight < nPastBlocks + 2) // We are adding 2 here to skip the first two blocks at nProofOfWorkLimit, but it isn't necessary to do this for the average to work
         return WeightedTargetExponentialMovingAverage(pindexLast, pblock, params);
 
-    const CBlockIndex *pindex = pindexPrev;
+    const CBlockIndex* pindex = pindexPrev;
     arith_uint256 bnPastTargetAvg;
 
     // This is a simple moving average of difficulty targets with double weight for the most recent target by default (same as a harmonic SMA of difficulties)
@@ -273,8 +279,9 @@ unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlo
     // If pprev was nullptr, nActualTimespan will use one less than nPastBlocks timestamps, which causes difficulty to be slightly higher than expected
     int nActualTimespan = pindexPrev->GetBlockTime() - pindex->GetBlockTime(); // Dark Gravity Wave
     int nTargetTimespan = nPastBlocks * nTargetSpacing;
-    // Respond faster by avoiding tempering when nActualTimespan is very small or very large
-    if (nActualTimespan <= nTargetTimespan / 2 || nActualTimespan >= nTargetTimespan * 2)
+    // Respond faster by avoiding tempering when the average solvetime is at least 15% too low or too high
+    const int nMaxSolvetimeErrorPercentage = 15;
+    if (nActualTimespan <= (nTargetTimespan * (100 - nMaxSolvetimeErrorPercentage)) / 100 || nActualTimespan >= (nTargetTimespan * (100 + nMaxSolvetimeErrorPercentage)) / 100)
         fUseTempering = false;
 
     // Note we did not use MTP to calculate nActualTimespan here, which enables the time warp attack to drop the difficulty to zero using timestamps in the past due to the timespan limit below
@@ -302,7 +309,7 @@ unsigned int WeightedMovingAverageTarget(const CBlockIndex* pindexLast, const CB
     const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
     const bool fProofOfStake = pblock->IsProofOfStake();
     const arith_uint256 bnPowLimit = algo == -1 ? UintToArith256(params.powLimit[fProofOfStake ? CBlockHeader::ALGO_POS : CBlockHeader::ALGO_POW_QUARK]) : UintToArith256(params.powLimit[algo]);
-    const unsigned int nProofOfWorkLimit = bnPowLimit.GetCompact();
+    const uint32_t nProofOfWorkLimit = bnPowLimit.GetCompact();
     uint32_t nTargetSpacing = params.nPowTargetSpacing;
     nTargetSpacing *= 2; // 160 second block time for PoW + 160 second block time for PoS = 80 second effective block time
     if (!fProofOfStake)
@@ -315,15 +322,19 @@ unsigned int WeightedMovingAverageTarget(const CBlockIndex* pindexLast, const CB
     if (pindexLast == nullptr)
         return nProofOfWorkLimit; // genesis block
 
-    const CBlockIndex *pindexPrev = algo == -1 ? GetLastBlockIndex(pindexLast, fProofOfStake) : GetLastBlockIndexForAlgo(pindexLast, algo);
+    const CBlockIndex* pindexPrev = algo == -1 ? GetLastBlockIndex(pindexLast, fProofOfStake) : GetLastBlockIndexForAlgo(pindexLast, algo);
     if (pindexPrev->pprev == nullptr)
         return nProofOfWorkLimit; // first block
+
+    const CBlockIndex* pindexPrevPrev = algo == -1 ? GetLastBlockIndex(pindexPrev->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindexPrev->pprev, algo);
+    if (pindexPrevPrev->pprev == nullptr)
+        return nProofOfWorkLimit; // second block
 
     //nPastBlocks = std::min(nPastBlocks, pindexLast->nHeight);
     if (pindexLast->nHeight < nPastBlocks + 2) // We are adding 2 here to skip the first two blocks at nProofOfWorkLimit, but it isn't necessary to do this for the average to work
         return WeightedTargetExponentialMovingAverage(pindexLast, pblock, params);
 
-    const CBlockIndex *pindex = pindexPrev;
+    const CBlockIndex* pindex = pindexPrev;
     arith_uint256 bnPastTargetAvg;
     int64_t nSumSolvetimesWeighted = 0;
     uint32_t nElementsAveraged = 0;
@@ -371,7 +382,7 @@ unsigned int WeightedMovingAverageTarget(const CBlockIndex* pindexLast, const CB
     return bnNew.GetCompactRounded();
 }
 
-bool CheckProofOfWork(uint256 hash, unsigned int nBits, int algo, const Consensus::Params& params)
+bool CheckProofOfWork(const uint256& hash, const unsigned int& nBits, const int& algo, const Consensus::Params& params)
 {
     bool fNegative;
     bool fOverflow;
