@@ -2072,7 +2072,7 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
     int64_t nTimeStart = GetTimeMicros();
 
     const bool fProofOfStake = block.IsProofOfStake();
-    //if ((fReindex || block.nVersion < chainparams.GetConsensus().nUpgradeBlockVersion[0]) && pindex->GetBlockHash() != chainparams.GetConsensus().hashGenesisBlock && block.nBits != GetNextWorkRequired(pindex->pprev, &block, chainparams.GetConsensus()))
+    //if ((fReindex || block.nVersion < chainparams.GetConsensus().nUpgradeBlockVersion[0]) && block.nBits != GetNextWorkRequired(pindex->pprev, &block, chainparams.GetConsensus()))
         //return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-diffbits", strprintf("%s: incorrect difficulty target", __func__));
     //LogPrintf("%s: INFO: block %i bnTarget = %s\n", __func__, pindex->nHeight, arith_uint256().SetCompact(block.nBits).ToString());
 
@@ -3721,7 +3721,7 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
 
     // Check proof of work
     const Consensus::Params& consensusParams = params.GetConsensus();
-    //LogPrintf("%s: block %i - bnTarget = %s, expected bnTarget = %s\n", __func__, nHeight, arith_uint256().SetCompact(block.nBits).ToString(), arith_uint256().SetCompact(GetNextWorkRequired(pindexPrev, &block, consensusParams)).ToString());
+    LogPrintf("%s: block %i - bnTarget = %s, expected bnTarget = %s\n", __func__, nHeight, arith_uint256().SetCompact(block.nBits).ToString(), arith_uint256().SetCompact(GetNextWorkRequired(pindexPrev, &block, consensusParams)).ToString());
     if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-diffbits", "incorrect difficulty target");
 

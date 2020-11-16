@@ -45,7 +45,7 @@ static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesi
     genesis.hashPrevBlock.SetNull();
     genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
 
-    arith_uint256 hashTarget = arith_uint256().SetCompact(genesis.nBits);
+    arith_uint256 hashTarget = arith_uint256().SetCompact(genesis.nBits); // 0x1f00ffff
     /*while (true) {
         arith_uint256 hash = UintToArith256(genesis.GetPoWHash());
         if (hash <= hashTarget) {
@@ -77,7 +77,8 @@ static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesi
 static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
 {
     const char* pszTimestamp = "http://www.bbc.co.uk/news/world-us-canada-42926976"; // Trump Russia: Democrats say firing special counsel could cause crisis
-    const CScript genesisOutputScript = CScript() << ParseHex("03b95000b2b06e391c058ea14d47ac3c525753c68460864f254ada5a63e27a8134") << OP_CHECKSIG;
+    //const CScript genesisOutputScript = CScript() << ParseHex("03b95000b2b06e391c058ea14d47ac3c525753c68460864f254ada5a63e27a8134") << OP_CHECKSIG;
+    const CScript genesisOutputScript = CScript() << OP_0 << ParseHex("27f1579ac01d281438b312dde64d54d31fa4a8e8");
     return CreateGenesisBlock(pszTimestamp, genesisOutputScript, nTime, nNonce, nBits, nVersion, genesisReward);
 }
 
@@ -116,6 +117,7 @@ public:
         consensus.powLimit[CBlockHeader::ALGO_POW_SHA1D] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000");
         consensus.powLimit[CBlockHeader::ALGO_POW_ARGON2D] = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000"); // 0x1f00ffff
         consensus.nPowTargetTimespan = 1 * 24 * 60 * 60; // 1 day
+        consensus.nASERTBlockTargetAveragingTimespan = 14 * 24 * 60 * 60; // 2 weeks
         consensus.nPowTargetSpacing = 80; // 80-second block spacing
         consensus.nStakeTimestampMask = 0xf; // 16 second time slots - normally, more than this wouldn't work with an 80 second block time because 80 isn't divisible by 32, but the effective PoS target spacing is 160 seconds due to hybrid PoW/PoS
         consensus.nStakeMinDepth[0] = 200;
@@ -253,11 +255,11 @@ public:
         consensus.nBadScryptDiffEndTime = 0;
         consensus.BIP16Exception = uint256S("0x0000000000000000000000000000000000000000000000000000000000000000");
         consensus.BIP34Height = 0;
-        consensus.BIP34Hash = uint256S("0x16e0228f2712c94c10ec590a98a416a664bdf42ebd10a6ffe563d817ee19b6b9");
-        consensus.BIP65Height = 0; // 16e0228f2712c94c10ec590a98a416a664bdf42ebd10a6ffe563d817ee19b6b9
-        consensus.BIP66Height = 0; // 16e0228f2712c94c10ec590a98a416a664bdf42ebd10a6ffe563d817ee19b6b9
+        consensus.BIP34Hash = uint256S("0x64aaacff5d8b95634776c67435e50d69b295012e34883be90e0a5efdc9dc0857");
+        consensus.BIP65Height = 0; // 64aaacff5d8b95634776c67435e50d69b295012e34883be90e0a5efdc9dc0857
+        consensus.BIP66Height = 0; // 64aaacff5d8b95634776c67435e50d69b295012e34883be90e0a5efdc9dc0857
         consensus.CSVHeight = 1; // 000037a145d6812571b0c413d868a43146d7159056afe7a06b344e9ee0de39fc
-        consensus.SegwitHeight = 0; // 16e0228f2712c94c10ec590a98a416a664bdf42ebd10a6ffe563d817ee19b6b9
+        consensus.SegwitHeight = 0; // 64aaacff5d8b95634776c67435e50d69b295012e34883be90e0a5efdc9dc0857
         consensus.MinBIP9WarningHeight = 0; // segwit activation height + miner confirmation window
         consensus.powLimit[CBlockHeader::ALGO_POS] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000");
         consensus.powLimit[CBlockHeader::ALGO_POW_QUARK] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000");
@@ -265,6 +267,7 @@ public:
         consensus.powLimit[CBlockHeader::ALGO_POW_SHA1D] = uint256S("000000ffff000000000000000000000000000000000000000000000000000000");
         consensus.powLimit[CBlockHeader::ALGO_POW_ARGON2D] = uint256S("0000ffff00000000000000000000000000000000000000000000000000000000");
         consensus.nPowTargetTimespan = 1 * 24 * 60 * 60; // 1 day
+        consensus.nASERTBlockTargetAveragingTimespan = 14 * 24 * 60 * 60; // 2 weeks
         consensus.nPowTargetSpacing = 64; // 64-second block spacing
         consensus.nStakeTimestampMask = 0xf; // 16 second time slots
         consensus.nStakeMinDepth[0] = 100;
@@ -298,12 +301,12 @@ public:
         m_assumed_blockchain_size = 5;
         m_assumed_chain_state_size = 1;
 
-        genesis = CreateGenesisBlock(1574924400, 2961, UintToArith256(consensus.powLimit[CBlockHeader::ALGO_POW_QUARK]).GetCompact(), CBlockHeader::VERSION_POW_QUARK, 10000 * COIN);
+        genesis = CreateGenesisBlock(1574924400, 612248, UintToArith256(consensus.powLimit[CBlockHeader::ALGO_POW_QUARK]).GetCompact(), CBlockHeader::VERSION_POW_QUARK, 10000 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
         //printf("Merkle hash testnet: %s\n", genesis.hashMerkleRoot.ToString().c_str());
         //printf("Genesis hash testnet: %s\n", consensus.hashGenesisBlock.ToString().c_str());
-        assert(genesis.hashMerkleRoot == uint256S("0x56d78c2879e2a685669fd14576a9b267dcc2adad9ffa6049d079e5acf3137b40"));
-        assert(consensus.hashGenesisBlock == uint256S("0x16e0228f2712c94c10ec590a98a416a664bdf42ebd10a6ffe563d817ee19b6b9"));
+        assert(genesis.hashMerkleRoot == uint256S("0xd5e99b939cb42df6814f20f222c20c2eab96aad6cc462ac0ad4e562aa961c462"));
+        assert(consensus.hashGenesisBlock == uint256S("0x64aaacff5d8b95634776c67435e50d69b295012e34883be90e0a5efdc9dc0857"));
 
         vFixedSeeds.clear();
         vSeeds.clear();
@@ -330,7 +333,7 @@ public:
 
         checkpointData = {
             {
-                {0, uint256S("0x16e0228f2712c94c10ec590a98a416a664bdf42ebd10a6ffe563d817ee19b6b9")},
+                {0, uint256S("0x64aaacff5d8b95634776c67435e50d69b295012e34883be90e0a5efdc9dc0857")},
             }
         };
 
@@ -379,6 +382,7 @@ public:
         consensus.powLimit[CBlockHeader::ALGO_POW_SHA1D] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
         consensus.powLimit[CBlockHeader::ALGO_POW_ARGON2D] = uint256S("7fffff0000000000000000000000000000000000000000000000000000000000");
         consensus.nPowTargetTimespan = 20 * 60; // 20 minutes
+        consensus.nASERTBlockTargetAveragingTimespan = 1 * 24 * 60 * 60; // 1 day
         consensus.nPowTargetSpacing = 32; // 32-second block spacing
         consensus.nStakeTimestampMask = 0x3; // 4 second time slots
         consensus.nStakeMinDepth[0] = 0;
@@ -414,12 +418,12 @@ public:
 
         UpdateActivationParametersFromArgs(args);
 
-        genesis = CreateGenesisBlock(1574924400, 47047, 0x1f00ffff, CBlockHeader::VERSION_POW_QUARK, 10000 * COIN);
+        genesis = CreateGenesisBlock(1574924400, 48907, UintToArith256(consensus.powLimit[CBlockHeader::ALGO_POW_QUARK]).GetCompact(), CBlockHeader::VERSION_POW_QUARK, 10000 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
         //printf("Merkle hash regtest: %s\n", genesis.hashMerkleRoot.ToString().c_str());
         //printf("Genesis hash regtest: %s\n", consensus.hashGenesisBlock.ToString().c_str());
-        assert(genesis.hashMerkleRoot == uint256S("0x56d78c2879e2a685669fd14576a9b267dcc2adad9ffa6049d079e5acf3137b40"));
-        assert(consensus.hashGenesisBlock == uint256S("0xbccd4c5f87de046e4cd9e222982371c0cf0ad8b5fcfa6753be472f04544fb41f"));
+        assert(genesis.hashMerkleRoot == uint256S("0xd5e99b939cb42df6814f20f222c20c2eab96aad6cc462ac0ad4e562aa961c462"));
+        assert(consensus.hashGenesisBlock == uint256S("0x5ac5f7b6f45daac7b5250f1023b6d5b5402407b49a3adb1c6834d59eabef5229"));
 
         vFixedSeeds.clear(); //!< Regtest mode doesn't have any fixed seeds.
         vSeeds.clear();      //!< Regtest mode doesn't have any DNS seeds.
@@ -431,7 +435,7 @@ public:
 
         checkpointData = {
             {
-                {0, uint256S("0xbccd4c5f87de046e4cd9e222982371c0cf0ad8b5fcfa6753be472f04544fb41f")},
+                {0, uint256S("0x5ac5f7b6f45daac7b5250f1023b6d5b5402407b49a3adb1c6834d59eabef5229")},
             }
         };
 

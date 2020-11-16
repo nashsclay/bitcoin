@@ -27,6 +27,21 @@ static inline const CBlockIndex* GetLastBlockIndexForAlgo(const CBlockIndex* pin
     return pindex;
 }
 
+static inline const CBlockIndex* GetASERTReferenceBlockAndHeightForAlgo(const CBlockIndex* pindex, const uint32_t& nProofOfWorkLimit, const int& nASERTStartHeight, const int& algo, uint32_t& nBlocksPassed)
+{
+    nBlocksPassed = 0;
+    while (pindex && pindex->pprev && pindex->nHeight >= nASERTStartHeight) {
+        //if (pindex->nBits != (nProofOfWorkLimit - 1))
+            nBlocksPassed++;
+        const CBlockIndex* pprev = GetLastBlockIndexForAlgo(pindex->pprev, algo);
+        if (pprev)
+            pindex = pprev;
+        else
+            break;
+    }
+    return pindex;
+}
+
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
 {
     const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
@@ -57,10 +72,11 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
         }
     }
 
-    if (pblock->IsProofOfStake() && (unsigned)(pindexLast->nHeight+1) >= (params.nMandatoryUpgradeBlock[1]+params.nMinerConfirmationWindow))
+    return SimpleTargetFrontier(pindexLast, pblock, params);
+    /*if (pblock->IsProofOfStake() && (unsigned)(pindexLast->nHeight+1) >= (params.nMandatoryUpgradeBlock[1]+params.nMinerConfirmationWindow))
         return SimpleMovingAverageTarget(pindexLast, pblock, params);
     else
-        return CalculateNextTargetRequired(pindexLast, pblock, params);
+        return CalculateNextTargetRequired(pindexLast, pblock, params);*/
 }
 
 unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
@@ -216,6 +232,187 @@ unsigned int WeightedTargetExponentialMovingAverage(const CBlockIndex* pindexLas
     return bnNew.GetCompactRounded();
 }
 
+unsigned int ASERT(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
+{
+    const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
+    const bool fProofOfStake = pblock->IsProofOfStake();
+    const arith_uint256 bnPowLimit = algo == -1 ? UintToArith256(params.powLimit[fProofOfStake ? CBlockHeader::ALGO_POS : CBlockHeader::ALGO_POW_QUARK]) : UintToArith256(params.powLimit[algo]);
+    const uint32_t nProofOfWorkLimit = bnPowLimit.GetCompact();
+    uint32_t nTargetSpacing = params.nPowTargetSpacing;
+    nTargetSpacing *= 2; // 160 second block time for PoW + 160 second block time for PoS = 80 second effective block time
+    if (!fProofOfStake)
+        nTargetSpacing *= (CBlockHeader::ALGO_COUNT - 1); // Multiply by the number of PoW algos
+
+    if (pindexLast == nullptr)
+        return nProofOfWorkLimit; // genesis block
+
+    const CBlockIndex* pindexPrev = algo == -1 ? GetLastBlockIndex(pindexLast, fProofOfStake) : GetLastBlockIndexForAlgo(pindexLast, algo);
+    if (pindexPrev->pprev == nullptr)
+        return nProofOfWorkLimit; // first block
+
+    const CBlockIndex* pindexPrevPrev = algo == -1 ? GetLastBlockIndex(pindexPrev->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindexPrev->pprev, algo);
+    if (pindexPrevPrev->pprev == nullptr)
+        return nProofOfWorkLimit; // second block
+
+    const uint32_t nASERTStartHeight = 30;
+    const uint32_t nASERTBlockTargetsToAverage = 10; //params.nASERTBlockTargetAveragingTimespan / nTargetSpacing;
+
+    const uint32_t nHeight = pindexLast->nHeight + 1;
+    if (nHeight < nASERTStartHeight)
+        return WeightedTargetExponentialMovingAverage(pindexLast, pblock, params);
+
+    uint32_t nBlocksPassed = 0;
+    const CBlockIndex* pindexReferenceBlock = GetASERTReferenceBlockAndHeightForAlgo(pindexPrev, nProofOfWorkLimit, nASERTStartHeight, algo, nBlocksPassed);
+    const int64_t nTimeDiff = pindexPrev->GetBlockTime() - pindexReferenceBlock->GetBlockTime();
+    const uint32_t nHeightDiff = nBlocksPassed; //pindexPrev->nHeight - pindexReferenceBlock->nHeight;
+    arith_uint256 refBlockTarget;
+
+    if (nASERTBlockTargetsToAverage && nHeight >= nASERTStartHeight + nASERTBlockTargetsToAverage) {
+        const uint32_t nBlocksToSkip = nHeightDiff % nASERTBlockTargetsToAverage; // todo: check that this isn't off by one
+        const CBlockIndex* pindex = pindexPrev;
+
+        for (unsigned int i = 0; i < nBlocksToSkip; i++) {
+            pindex = algo == -1 ? GetLastBlockIndex(pindex->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindex->pprev, algo);
+        }
+
+        for (unsigned int i = 0; i < nASERTBlockTargetsToAverage; i++) {
+            if (pindex->nBits != (nProofOfWorkLimit - 1) || !params.fPowAllowMinDifficultyBlocks) { // Don't add min difficulty targets to the average
+                arith_uint256 bnTarget = arith_uint256().SetCompact(pindex->nBits);
+                refBlockTarget += bnTarget / nASERTBlockTargetsToAverage;
+            } else
+                i--; // Average one more block to make up for the one we skipped
+            pindex = algo == -1 ? GetLastBlockIndex(pindex->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindex->pprev, algo);
+        }
+    } else
+        refBlockTarget = arith_uint256().SetCompact(pindexReferenceBlock->nBits);
+
+    arith_uint256 bnNew(refBlockTarget);
+    const int64_t dividend = nTimeDiff - nTargetSpacing * nHeightDiff;
+    const uint32_t divisor = params.nPowTargetTimespan; // Must be positive
+    const int exponent = dividend / divisor; // todo: apparently this rounds down positive and rounds up negative numbers
+    const uint32_t remainder = dividend >= 0 ? dividend % divisor : -dividend % divisor; // Must be positive
+    arith_uint256 numerator = 1; // We are using uint256 rather than uint64_t here because a nPowTargetTimespan of more than 7 days in the divisor would cause the following cubic approximation to overflow a uint64_t
+    arith_uint256 denominator = 1;
+
+    if (exponent >= 0) {
+        for (int i = 0; i < exponent; i++)
+            numerator *= 2;
+
+        if (remainder != 0) { // Approximate 2^x with (4x^3+11x^2+35x+50)/50 for 0<x<1 (must be equal to 1 at x=0 and equal to 2 at x=1 to avoid discontinuities) - note: x+1 and (3x^2+7x+10)/10 are also decent and less complicated approximations
+            //numerator *= divisor + remainder;
+            //denominator *= divisor;
+            const arith_uint256 bnDivisor(divisor);
+            const arith_uint256 bnRemainder(remainder);
+            numerator = numerator * ((4 * bnRemainder*bnRemainder*bnRemainder) + (11 * bnRemainder*bnRemainder * bnDivisor) + (35 * bnRemainder * bnDivisor*bnDivisor) + (50 * bnDivisor*bnDivisor*bnDivisor));
+            denominator = denominator * (50 * bnDivisor*bnDivisor*bnDivisor);
+        }
+    } else {
+        for (int i = 0; i > exponent; i--)
+            denominator *= 2;
+
+        if (remainder != 0) { // Approximate 2^x with (4x^3+11x^2+35x+50)/50 for 0<x<1 (must be equal to 1 at x=0 and equal to 2 at x=1 to avoid discontinuities) - note: x+1 and (3x^2+7x+10)/10 are also decent and less complicated approximations
+            //numerator *= divisor;
+            //denominator *= divisor + remainder;
+            const arith_uint256 bnDivisor(divisor);
+            const arith_uint256 bnRemainder(remainder);
+            numerator = numerator * (50 * bnDivisor*bnDivisor*bnDivisor);
+            denominator = denominator * ((4 * bnRemainder*bnRemainder*bnRemainder) + (11 * bnRemainder*bnRemainder * bnDivisor) + (35 * bnRemainder * bnDivisor*bnDivisor) + (50 * bnDivisor*bnDivisor*bnDivisor));
+        }
+    }
+
+    // Keep in mind the order of operations and integer division here - this is why the *= operator cannot be used, as it could cause overflow or integer division to occur
+    arith_uint512 bnNew512 = arith_uint512(bnNew) * arith_uint512(numerator) / arith_uint512(denominator);
+    bnNew = bnNew512.trim256();
+
+    //printf("numerator = %s\n", numerator.ToString().c_str());
+    //printf("denominator = %s\n", denominator.ToString().c_str());
+    //printf("10000 * 2^(%li/%u) = %s\n", dividend, divisor, arith_uint512((10000 * arith_uint512(numerator)) / arith_uint512(denominator)).trim256().ToString().c_str());
+    if (bnNew512 > arith_uint512(bnPowLimit) || bnNew == arith_uint256())
+        bnNew = bnPowLimit;
+
+    return bnNew.GetCompactRounded();
+}
+
+unsigned int SimpleTargetFrontier(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
+{
+    const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
+    const bool fProofOfStake = pblock->IsProofOfStake();
+    const arith_uint256 bnPowLimit = algo == -1 ? UintToArith256(params.powLimit[fProofOfStake ? CBlockHeader::ALGO_POS : CBlockHeader::ALGO_POW_QUARK]) : UintToArith256(params.powLimit[algo]);
+    const uint32_t nProofOfWorkLimit = bnPowLimit.GetCompact();
+    if (pindexLast == nullptr)
+        return nProofOfWorkLimit; // genesis block
+
+    const CBlockIndex* pindexPrev = algo == -1 ? GetLastBlockIndex(pindexLast, fProofOfStake) : GetLastBlockIndexForAlgo(pindexLast, algo);
+    if (pindexPrev->pprev == nullptr)
+        return nProofOfWorkLimit; // first block
+
+    const CBlockIndex* pindexPrevPrev = algo == -1 ? GetLastBlockIndex(pindexPrev->pprev, fProofOfStake) : GetLastBlockIndexForAlgo(pindexPrev->pprev, algo);
+    if (pindexPrevPrev->pprev == nullptr)
+        return nProofOfWorkLimit; // second block
+
+    const uint32_t nStartHeight = 5;
+
+    const uint32_t nHeight = pindexLast->nHeight + 1;
+    if (nHeight < nStartHeight)
+        //return WeightedTargetExponentialMovingAverage(pindexLast, pblock, params);
+        return 0x1d2fffff;
+
+    int64_t nActualSpacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime(); // Difficulty for PoW and PoS are calculated separately
+
+    arith_uint256 bnNew;
+    bnNew.SetCompact(pindexPrev->nBits);
+    int64_t nTargetSpacing = params.nPowTargetSpacing;
+    uint32_t nTargetAdjustmentPercentage = 1; // Target will adjust up or down by 0.1% every block depending on whether the previous solvetime was slow or fast (2% = 17 block DigiShield = 68 block SMA, also 1.02^(35 blocks) = 2x target)
+    //nTargetSpacing *= 2; // 160 second block time for PoW + 160 second block time for PoS = 80 second effective block time
+    //if (!fProofOfStake)
+        //nTargetSpacing *= (CBlockHeader::ALGO_COUNT - 1); // Multiply by the number of PoW algos
+
+    // Long term solvetime correction adjusting nTargetSpacing
+    uint32_t nBlocksPassed = 0;
+    const CBlockIndex* pindexReferenceBlock = GetASERTReferenceBlockAndHeightForAlgo(pindexPrev, nProofOfWorkLimit, 2 /* nStartHeight */, algo, nBlocksPassed);
+    const int64_t nTimeDiff = pindexPrev->GetBlockTime() - pindexReferenceBlock->GetBlockTime();
+    const uint32_t nHeightDiff = nBlocksPassed; //pindexPrev->nHeight - pindexReferenceBlock->nHeight;
+    const int64_t nScheduleDeviation = nTimeDiff - nTargetSpacing * nHeightDiff;
+
+    // todo: multiply target spacing by ln(2) and round instead of truncating
+    //printf("actual spacing = %li\n", nActualSpacing);
+    nActualSpacing *= 100000000000ull; // Increase accuracy for the next calculation
+    const int64_t LN2 = 69314718056ull; // Natural logarithm of 2 (rounded)
+
+    //printf("(schedule deviation=%li) / (target spacing=%li) = %li blocks behind schedule at height=%u\n", nScheduleDeviation, nTargetSpacing, nScheduleDeviation / nTargetSpacing, nHeight);
+    //printf("average spacing = %li seconds per block\n", nTimeDiff / nHeightDiff);
+
+    // WARNING: The following code will cause oscillations in difficulty if the number of blocks of acceptable schedule deviation is set too small. This is due
+    // to undershoot/overshoot in difficulty target while attempting to increase/decrease target spacing. Ample time must be provided for the difficulty target
+    // to adjust back up/down to its ideal value so that the actual spacing will reflect the original target spacing or else the difficulty target will continually
+    // oscillate by undershooting/overshooting the ideal value because the current target when schedule deviation has been eliminated will be lower/higher than ideal.
+    if (nScheduleDeviation <= -100 * nTargetSpacing) { // If we are at least 100 blocks ahead of schedule, increase nTargetSpacing by 10% and adjust target 10x faster
+        nTargetSpacing *= LN2;
+        nTargetSpacing = (nTargetSpacing * 11) / 10;
+        nTargetAdjustmentPercentage *= 10;
+        //printf("height=%u ahead of schedule\n", nHeight);
+    } else if (nScheduleDeviation >= 100 * nTargetSpacing) { // If we are at least 100 blocks behind schedule, decrease nTargetSpacing by 10% and adjust target 10x faster
+        nTargetSpacing *= LN2;
+        nTargetSpacing = (nTargetSpacing * 9) / 10;
+        nTargetAdjustmentPercentage *= 10;
+        //printf("height=%u behind schedule\n", nHeight);
+    } else
+        nTargetSpacing *= LN2;
+
+    //printf("nActualSpacing = %li, nTargetSpacing = %li, nActualSpacing < nTargetSpacing = %i\n", nActualSpacing, nTargetSpacing, nActualSpacing < nTargetSpacing);
+    const uint32_t numerator = nActualSpacing < nTargetSpacing ? (1000 - nTargetAdjustmentPercentage) : (1000 + nTargetAdjustmentPercentage);
+    const uint32_t denominator = 1000;
+
+    // Keep in mind the order of operations and integer division here - this is why the *= operator cannot be used, as it could cause overflow or integer division to occur
+    arith_uint512 bnNew512 = arith_uint512(bnNew) * numerator / denominator;
+    bnNew = bnNew512.trim256();
+
+    if (bnNew512 > arith_uint512(bnPowLimit) || bnNew == arith_uint256())
+        bnNew = bnPowLimit;
+
+    return bnNew.GetCompactRounded();
+}
+
 unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
 {
     const int algo = CBlockHeader::GetAlgo(pblock->nVersion);
@@ -280,6 +477,7 @@ unsigned int SimpleMovingAverageTarget(const CBlockIndex* pindexLast, const CBlo
     int nActualTimespan = pindexPrev->GetBlockTime() - pindex->GetBlockTime(); // Dark Gravity Wave
     int nTargetTimespan = nPastBlocks * nTargetSpacing;
     // Respond faster by avoiding tempering when the average solvetime is at least 15% too low or too high
+    // WARNING: The following code will cause oscillations in difficulty if the max error percentage is set too low due to undershoot/overshoot in difficulty target
     const int nMaxSolvetimeErrorPercentage = 15;
     if (nActualTimespan <= (nTargetTimespan * (100 - nMaxSolvetimeErrorPercentage)) / 100 || nActualTimespan >= (nTargetTimespan * (100 + nMaxSolvetimeErrorPercentage)) / 100)
         fUseTempering = false;
