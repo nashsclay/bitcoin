@@ -59,6 +59,7 @@
 #include <util/threadnames.h>
 #include <util/translation.h>
 #include <validation.h>
+#include <wallet/wallet.h>
 
 #include <validationinterface.h>
 #include <walletinitinterface.h>
@@ -2018,6 +2019,10 @@ bool AppInitMain(const util::Ref& context, NodeContext& node, interfaces::BlockA
     node.scheduler->scheduleEvery([banman]{
         banman->DumpBanlist();
     }, DUMP_BANS_INTERVAL);
+
+    std::vector<std::shared_ptr<CWallet>> wallets = GetWallets();
+    if (wallets.size() && wallets[0] && gArgs.GetBoolArg("-stakegen", true))
+        MintStake(threadGroup, wallets[0], node.chainman, node.connman.get(), node.mempool.get());
 
 #if HAVE_SYSTEM
     StartupNotify(args);
