@@ -619,7 +619,7 @@ bool CreateCoinStake(CMutableTransaction& coinstakeTx, CBlock* pblock, CWallet* 
 static inline bool ProcessBlockFound(const CBlock* pblock, const CChainParams& chainparams, ChainstateManager* chainman)
 {
     LogPrintf("%s\n", pblock->ToString());
-    LogPrintf("generated %s\n", FormatMoney(pblock->IsProofOfStake() ? pblock->vtx[1]->vout[1].nValue : pblock->vtx[0]->vout[0].nValue));
+    LogPrintf("generated %s\n", FormatMoney(pblock->IsProofOfStake() ? pblock->vtx[1]->GetValueOut() : pblock->vtx[0]->GetValueOut()));
 
     // Found a solution
     {
