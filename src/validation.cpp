@@ -2426,6 +2426,11 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
     pindex->nTreasuryPayment = nTreasuryPayment;
     //LogPrintf("ConnectBlock(): INFO: nValueOut: %s, nValueIn: %s, nFees: %s, nMint: %s\n", FormatMoney(nValueOut), FormatMoney(nValueIn), FormatMoney(nFees), FormatMoney(pindex->nMint));
 
+    // peercoin: fees are not collected by miners as in bitcoin
+    // peercoin: fees are destroyed to compensate the entire network
+    if (gArgs.GetBoolArg("-printcreation", false))
+        LogPrintf("%s: destroy=%s nFees=%lld\n", __func__, FormatMoney(nAmountBurned), FormatMoney(nFees));
+
     if (pindex->GetBlockHash() != chainparams.GetConsensus().hashGenesisBlock && !WriteUndoDataForBlock(blockundo, state, pindex, chainparams))
         return false;
 
@@ -5691,11 +5696,13 @@ bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache& view, unsigned in
 
         bnSatoshiSecond += arith_uint256(nValueIn) * nTimeDiff;
 
-        //LogPrintf("coin age nValueIn=%-12lld nTimeDiff=%d bnCentSecond=%s\n", nValueIn, nTimeDiff, (bnSatoshiSecond*100/COIN).ToString());
+        if (gArgs.GetBoolArg("-printcoinage", false))
+            LogPrintf("coin age nValueIn=%-12lld nTimeDiff=%d bnCentSecond=%s\n", nValueIn, nTimeDiff, (bnSatoshiSecond*100/COIN).ToString());
     }
 
     arith_uint256 bnCoinDay = bnSatoshiSecond / COIN / (24 * 60 * 60);
-    //LogPrintf("coin age bnCoinDay=%s\n", bnCoinDay.ToString());
+    if (gArgs.GetBoolArg("-printcoinage", false))
+        LogPrintf("coin age bnCoinDay=%s\n", bnCoinDay.ToString());
     nCoinAge = bnCoinDay.GetLow64();
     return true;
 }

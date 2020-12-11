@@ -4599,15 +4599,8 @@ ScriptPubKeyMan* CWallet::AddWalletDescriptor(WalletDescriptor& desc, const Flat
 
 bool CWallet::SelectStakeCoins(std::set<CInputCoin>& setCoins)
 {
-    LOCK(cs_wallet);
-
     // Choose coins to use
     CAmount nBalance = GetBalance().m_mine_trusted;
-    CAmount nReserveBalance = 0;
-    if (gArgs.IsArgSet("-reservebalance") && !ParseMoney(gArgs.GetArg("-reservebalance", ""), nReserveBalance))
-        return error("CreateCoinStake : invalid reserve balance amount");
-    if (nBalance <= nReserveBalance)
-        return false;
     CAmount nValueIn = 0;
     std::vector<COutput> vAvailableCoins;
     CCoinControl temp;
@@ -4616,7 +4609,7 @@ bool CWallet::SelectStakeCoins(std::set<CInputCoin>& setCoins)
     bool bnb_used;
     AvailableCoins(vAvailableCoins, true, &temp, 1, MAX_MONEY, MAX_MONEY, 0);
 
-    if (!SelectCoins(vAvailableCoins, nBalance - nReserveBalance, setCoins, nValueIn, temp, coin_selection_params, bnb_used))
+    if (!SelectCoins(vAvailableCoins, nBalance, setCoins, nValueIn, temp, coin_selection_params, bnb_used))
         return false;
     if (setCoins.empty())
         return false;

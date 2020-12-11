@@ -521,6 +521,8 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
 
 bool CreateCoinStake(CMutableTransaction& coinstakeTx, CBlock* pblock, CWallet* pwallet, const CBlockIndex* pindexPrev, const Consensus::Params& consensusParams, const int nHeight)
 {
+    AssertLockHeld(pwallet->cs_wallet);
+
     bool fKernelFound = false;
     std::set<CInputCoin> setCoins;
     if (pwallet->SelectStakeCoins(setCoins)) {
@@ -557,7 +559,7 @@ bool CreateCoinStake(CMutableTransaction& coinstakeTx, CBlock* pblock, CWallet* 
                 // Found a kernel
                 if (gArgs.GetBoolArg("-debug", false) && gArgs.GetBoolArg("-printcoinstake", false))
                     LogPrintf("CreateCoinStake : kernel found\n");
-                //LogPrintf("proof-of-stake found\n   hash: %s\n target: %s\n   bits: %08x\n", hashProofOfStake.ToString(), arith_uint256().SetCompact(pblock->nBits).ToString(), pblock->nBits);
+                //LogPrintf("proof-of-stake found\n   hash: %s\n target: %s\n   bits: %08x\n", hashProofOfStake.ToString(), (arith_uint256().SetCompact(pblock->nBits) * arith_uint256(pcoin.txout.nValue)).ToString(), pblock->nBits);
                 std::vector<std::vector<unsigned char>> vSolutions;
                 CScript scriptPubKeyOut;
                 scriptPubKeyKernel = pcoin.txout.scriptPubKey;
