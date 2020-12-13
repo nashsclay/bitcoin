@@ -174,8 +174,6 @@ public:
         return !IsProofOfStake();
     }*/
 
-    unsigned int GetStakeEntropyBit() const; // peercoin: entropy bit for stake modifier if chosen by modifier
-
     std::string ToString() const;
 };
 

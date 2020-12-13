@@ -3748,6 +3748,10 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
     if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-diffbits", "incorrect difficulty target");
 
+    // Reject new PoW algorithms until they have been activated
+    if (nHeight < consensusParams.nLastPoWBlock && CBlockHeader::GetAlgo(block.nVersion) > CBlockHeader::ALGO_POW_SHA256)
+        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "new-algo", "block using new algo before activation");
+
     // Check against checkpoints
     if (fCheckpointsEnabled) {
         // Don't accept any forks from the main chain prior to last checkpoint.
@@ -5649,8 +5653,7 @@ bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache& view, unsigned in
         return true;
 
     const Consensus::Params& params = Params().GetConsensus();
-    for (const auto& txin : tx.vin)
-    {
+    for (const auto& txin : tx.vin) {
         // First try finding the previous transaction in database
         const COutPoint& prevout = txin.prevout;
         Coin coin;
