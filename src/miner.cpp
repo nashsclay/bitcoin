@@ -25,6 +25,7 @@
 #include <net.h>
 #include <node/context.h>
 #include <node/ui_interface.h>
+#include <validation.h>
 #include <wallet/wallet.h>
 #include <wallet/coincontrol.h>
 #include <warnings.h>
@@ -107,6 +108,18 @@ void BlockAssembler::resetBlock()
     nFees = 0;
 }
 
+static inline void FillTreasuryPayee(CMutableTransaction& txNew, const int nHeight, const Consensus::Params& consensusParams)
+{
+    const CAmount nTreasuryPayment = GetTreasuryPayment(nHeight, consensusParams);
+
+    if (nTreasuryPayment > 0) {
+        const std::map<CScript, int>& treasuryPayees = consensusParams.mTreasuryPayees;
+
+        for (const std::pair<CScript, int>& payee : treasuryPayees)
+            txNew.vout.emplace_back(nTreasuryPayment * payee.second / 100, payee.first);
+    }
+}
+
 Optional<int64_t> BlockAssembler::m_last_block_num_txs{nullopt};
 Optional<int64_t> BlockAssembler::m_last_block_weight{nullopt};
 
@@ -138,8 +151,10 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     coinbaseTx.vout.resize(1);
     coinbaseTx.vout[0].scriptPubKey = scriptPubKeyIn;
 
-    if (!fProofOfStake)
+    if (!fProofOfStake) {
         coinbaseTx.vout[0].nValue = /*nFees +*/ GetBlockSubsidy(nHeight, false, 0, consensusParams);
+        FillTreasuryPayee(coinbaseTx, nHeight, consensusParams);
+    }
 
     // Add dummy coinbase tx as first transaction
     pblocktemplate->entries.emplace_back(CTransactionRef(), -1, -1); // updated at end
@@ -204,7 +219,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
         CMutableTransaction coinstakeTx;
         int64_t nSearchTime = GetAdjustedTime(); // search to current time
         if (nSearchTime > nLastCoinStakeSearchTime) {
-            if (CreateCoinStake(coinstakeTx, pblock, pwallet, pindexPrev, consensusParams, nHeight)) {
+            if (CreateCoinStake(coinstakeTx, pblock, pwallet, nHeight, pindexPrev, consensusParams)) {
                 if (pblock->nTime > pindexPrev->GetMedianTimePast() && (pblock->nTime & consensusParams.nStakeTimestampMask) == 0) {
                     // make sure coinstake would meet timestamp protocol
                     // as it would be the same as the block timestamp
@@ -519,7 +534,7 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
 }
 
 
-bool CreateCoinStake(CMutableTransaction& coinstakeTx, CBlock* pblock, CWallet* pwallet, const CBlockIndex* pindexPrev, const Consensus::Params& consensusParams, const int nHeight)
+bool CreateCoinStake(CMutableTransaction& coinstakeTx, CBlock* pblock, CWallet* pwallet, const int& nHeight, const CBlockIndex* pindexPrev, const Consensus::Params& consensusParams)
 {
     AssertLockHeld(pwallet->cs_wallet);
 
@@ -593,13 +608,16 @@ bool CreateCoinStake(CMutableTransaction& coinstakeTx, CBlock* pblock, CWallet* 
                 uint64_t nCoinAge = 0;
                 if (!GetCoinAge((const CTransaction)coinstakeTx, view, pblock->nTime, nHeight, nCoinAge))
                     return error("%s : failed to calculate coin age", __func__);
-    
+
                 CAmount nReward = GetBlockSubsidy(nHeight, true, nCoinAge, consensusParams);
                 // Refuse to create mint that has zero or negative reward
                 if (nReward <= 0)
                     return false;
                 nCredit += nReward;
                 coinstakeTx.vout.push_back(CTxOut(nCredit, scriptPubKeyOut));
+
+                // Add treasury payment
+                FillTreasuryPayee(coinstakeTx, nHeight, consensusParams);
 
                 // Sign
                 int nIn = 0;

@@ -37,15 +37,19 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const interface
 
     if (wtx.is_coinstake) // peercoin: coinstake transaction
     {
-        TransactionRecord sub(hash, nTime, TransactionRecord::StakeMint, "", -nDebit, wtx.tx->GetValueOut());
-        CTxDestination address;
-        const CTxOut& txout = wtx.tx->vout[1];
-        isminetype mine = wtx.txout_is_mine[1];
+        TransactionRecord sub(hash, nTime, TransactionRecord::StakeMint, "", -nDebit, 0);
 
-        if(ExtractDestination(txout.scriptPubKey, address) && wtx.txout_address_is_mine[1])
-            sub.address = EncodeDestination(address);
+        for (unsigned int i = 0; i < wtx.tx->vout.size(); i++) {
+            const CTxOut& txout = wtx.tx->vout[i];
+            isminetype mine = wtx.txout_is_mine[i];
+            if (mine) {
+                sub.credit += txout.nValue;
+                if (wtx.txout_address_is_mine[i])
+                    sub.address = EncodeDestination(wtx.txout_address[i]);
+                sub.involvesWatchAddress = mine & ISMINE_WATCH_ONLY;
+            }
+        }
 
-        sub.involvesWatchAddress = mine & ISMINE_WATCH_ONLY;
         parts.append(sub);
     }
     else if (nNet > 0 || wtx.is_coinbase)
